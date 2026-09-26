@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Eye, Storefront, Signature, GithubLogo, Cube, TreeStructure } from "@phosphor-icons/react";
-import { AGENTS, HUB, HUB_R, NODE_R, POS, RING, SYSTEMS, VIEW, nodePoint, type SystemKey } from "../engine/constants";
+import { AGENTS, ARCS, HUB, HUB_R, NODE_R, POS, RING, SYSTEMS, VIEW, nodePoint, type SystemKey } from "../engine/constants";
 import { engine } from "../engine/engine";
 import { useEngine } from "../engine/useEngine";
 import type { Fx, NodeState } from "../engine/types";
@@ -151,7 +151,35 @@ export default function NetworkMap({ onHover }: { onHover?: (h: Hover) => void }
 
       <rect width={VIEW.w} height={VIEW.h} fill="url(#ns-dots)" mask="url(#ns-fade-mask)" opacity={0.55} />
       <circle cx={HUB.x} cy={HUB.y} r={RING} fill="none" strokeDasharray="2 8" style={{ stroke: "var(--line-2)" }} />
-      <circle cx={HUB.x} cy={HUB.y} r={150} fill="url(#ns-hub-glow)" />
+      <circle cx={HUB.x} cy={HUB.y} r={170} fill="url(#ns-hub-glow)" />
+
+      {/* the four kinds of work, each an arc of the ring; it lights up while one of its agents works or waits */}
+      {ARCS.map((c) => {
+        const R = RING - 74;
+        const pad = ((c.to - c.from) / c.agents.length) * 0.14;
+        const from = c.from + pad, to = c.to - pad, mid = (from + to) / 2;
+        const pt = (r: number, deg: number) => ({ x: HUB.x + r * Math.cos((deg * Math.PI) / 180), y: HUB.y + r * Math.sin((deg * Math.PI) / 180) });
+        const arc = (r: number, a: number, b: number, sweep: 0 | 1) => {
+          const p = pt(r, a), q = pt(r, b);
+          return `M${p.x.toFixed(1)},${p.y.toFixed(1)} A${r},${r} 0 ${Math.abs(b - a) > 180 ? 1 : 0} ${sweep} ${q.x.toFixed(1)},${q.y.toFixed(1)}`;
+        };
+        const tag = pt(RING - 120, mid);
+        const tw = c.label.length * 11 + 30;
+        const sts = c.agents.map((a) => s.status[a]);
+        const tone = sts.includes("waiting") ? "var(--amber)" : sts.includes("running") ? "var(--go)" : null;
+        const dim = focus && !c.agents.includes(focus as never);
+        return (
+          <g key={c.id} opacity={dim ? 0.35 : 1} style={{ transition: "opacity 250ms" }}>
+            <title>{`${c.label}: ${c.hint}`}</title>
+            <path d={arc(R, from, to, 1)} fill="none" strokeWidth={tone ? 3 : 2} strokeLinecap="round"
+              style={{ stroke: tone || "var(--line-2)", transition: "stroke 300ms" }} />
+            <rect x={tag.x - tw / 2} y={tag.y - 18} width={tw} height={36} rx={18}
+              style={{ fill: "var(--panel)", stroke: tone || "var(--line-2)", strokeWidth: 1, transition: "stroke 300ms" }} />
+            <text x={tag.x} y={tag.y + 6.5} textAnchor="middle" fontSize={19} fontWeight={650}
+              style={{ fill: tone ? (tone === "var(--amber)" ? "var(--amber-ink)" : "var(--go-ink)") : "var(--ink-2)", transition: "fill 300ms" }}>{c.label}</text>
+          </g>
+        );
+      })}
 
       {/* spokes */}
       {AGENTS.map(({ id }) => {
@@ -209,10 +237,10 @@ export default function NetworkMap({ onHover }: { onHover?: (h: Hover) => void }
 
       {/* supervisor */}
       <g className="ns-node" {...hov("supervisor", "supervisor")}>
-        {s.hubThinking && <circle cx={HUB.x} cy={HUB.y} r={60} fill="none" strokeWidth={1.5} className="ns-halo" style={{ stroke: "var(--sup)" }} />}
+        {s.hubThinking && <circle cx={HUB.x} cy={HUB.y} r={HUB_R + 4} fill="none" strokeWidth={1.5} className="ns-halo" style={{ stroke: "var(--sup)" }} />}
         <circle cx={HUB.x} cy={HUB.y} r={HUB_R} style={{ fill: "var(--sup-fill)", stroke: "var(--sup)", strokeWidth: s.hubThinking ? 3 : 2 }} />
-        <text x={HUB.x} y={HUB.y - 2} textAnchor="middle" fontSize={20} fontWeight={650} style={{ fill: "var(--sup)" }}>Supervisor</text>
-        <text x={HUB.x} y={HUB.y + 19} textAnchor="middle" fontSize={13} style={{ fill: "var(--muted)" }}>{s.hubThinking ? "deciding…" : "Kimi K3"}</text>
+        <text x={HUB.x} y={HUB.y - 2} textAnchor="middle" fontSize={22} fontWeight={650} style={{ fill: "var(--sup)" }}>Supervisor</text>
+        <text x={HUB.x} y={HUB.y + 21} textAnchor="middle" fontSize={14} style={{ fill: "var(--muted)" }}>{s.hubThinking ? "deciding…" : "Kimi K3"}</text>
       </g>
 
       {/* agents */}
@@ -230,27 +258,40 @@ export default function NetworkMap({ onHover }: { onHover?: (h: Hover) => void }
             <circle cx={p.x} cy={p.y} r={NODE_R}
               style={{ fill: st === "running" ? "color-mix(in oklab, var(--go) 13%, var(--panel))" : st === "waiting" ? "color-mix(in oklab, var(--amber) 16%, var(--panel))" : st === "failed" ? "color-mix(in oklab, var(--red) 14%, var(--panel))" : "var(--panel)",
                 stroke: col, strokeWidth: st && !skipped ? 2 : 1.4, transition: "fill 300ms, stroke 300ms" }} />
-            <text x={p.x} y={p.y + 5} textAnchor="middle" fontSize={(st === "waiting" ? 13.5 : 13) * Math.min(fk, 1.15)} fontWeight={600}
+            <text x={p.x} y={p.y + 5} textAnchor="middle" fontSize={(st === "waiting" ? 14.5 : 14) * Math.min(fk, 1.15)} fontWeight={600}
               style={{ fill: st && !skipped ? (st === "done" ? "var(--go-ink)" : st === "waiting" ? "var(--amber-ink)" : st === "failed" ? "var(--red-ink)" : "var(--go-ink)") : "var(--dim)" }}>
               {st ? GLYPH[st] : "idle"}
             </text>
-            <text x={p.x} y={p.y + NODE_R + 17 + 6 * fk + (st === "waiting" ? 6 : 0)} textAnchor="middle" fontSize={18 * fk} fontWeight={600} style={{ fill: "var(--ink)" }}>{label}</text>
-            <text x={p.x} y={p.y + NODE_R + 23 + 18 * fk + (st === "waiting" ? 6 : 0)} textAnchor="middle" fontSize={13 * fk} style={{ fill: "var(--muted)" }}>{model}</text>
+            {(() => {
+              const ang = Math.atan2(p.y - HUB.y, p.x - HUB.x), cx = Math.cos(ang), sy = Math.sin(ang);
+              const off = NODE_R + (st === "waiting" ? 16 : 12);
+              const lx = p.x + cx * off, ly = p.y + sy * off;
+              const anchor = cx > 0.2 ? "start" : cx < -0.2 ? "end" : "middle";
+              // name then model, stacked away from the ring
+              const nameY = sy > 0.35 ? ly + 16 * fk : sy < -0.35 ? ly - 17 * fk : ly - 1;
+              const modelY = sy < -0.35 ? ly - 1 : nameY + 17 * fk;
+              return (
+                <>
+                  <text x={lx} y={nameY} textAnchor={anchor} fontSize={18 * fk} fontWeight={600} style={{ fill: "var(--ink)" }}>{label}</text>
+                  <text x={lx} y={modelY} textAnchor={anchor} fontSize={13 * fk} style={{ fill: "var(--muted)" }}>{model}</text>
+                </>
+              );
+            })()}
             {runs > 1 && (
               <g>
-                <circle cx={p.x + 29} cy={p.y - 29} r={11} style={{ fill: "var(--sup)" }} />
-                <text x={p.x + 29} y={p.y - 25} textAnchor="middle" fontSize={12} fontWeight={700} style={{ fill: "var(--sup-fill)" }}>{runs}</text>
+                <circle cx={p.x + NODE_R * 0.76} cy={p.y - NODE_R * 0.76} r={11} style={{ fill: "var(--sup)" }} />
+                <text x={p.x + NODE_R * 0.76} y={p.y - NODE_R * 0.76 + 4} textAnchor="middle" fontSize={12} fontWeight={700} style={{ fill: "var(--sup-fill)" }}>{runs}</text>
               </g>
             )}
             {s.unverified[id] ? (
               <g>
                 <title>{`${s.unverified[id]} evidence item(s) not found in any tool output`}</title>
-                <circle cx={p.x + 29} cy={p.y + 29} r={10} style={{ fill: "var(--red)" }} />
-                <text x={p.x + 29} y={p.y + 33.5} textAnchor="middle" fontSize={13} fontWeight={800} style={{ fill: "var(--panel)" }}>!</text>
+                <circle cx={p.x + NODE_R * 0.76} cy={p.y + NODE_R * 0.76} r={10} style={{ fill: "var(--red)" }} />
+                <text x={p.x + NODE_R * 0.76} y={p.y + NODE_R * 0.76 + 4.5} textAnchor="middle" fontSize={13} fontWeight={800} style={{ fill: "var(--panel)" }}>!</text>
               </g>
             ) : null}
             {sats.map((t, i) => {
-              const a = -Math.PI / 2 + i * 0.75, r = 58;
+              const a = -Math.PI / 2 + i * 0.75, r = NODE_R + 20;
               const cx = p.x + r * Math.cos(a), cy = p.y + r * Math.sin(a);
               return (
                 <g key={i}>

@@ -1,9 +1,9 @@
 // The map keeps the geometry of the original dashboard: supervisor at the hub, agents on a ring, systems around it.
 export const VIEW = { w: 1200, h: 800 };
 export const HUB = { x: 600, y: 400 };
-export const RING = 262;
-export const NODE_R = 38;
-export const HUB_R = 58;
+export const RING = 282;
+export const NODE_R = 42;
+export const HUB_R = 64;
 
 export type AgentId =
   | "triage" | "diagnosis" | "validation" | "plan" | "mitigation" | "verify" | "fix"
@@ -30,11 +30,36 @@ export const PIPELINE: AgentId[] = [
   "triage", "diagnosis", "validation", "plan", "mitigation", "verify", "fix", "test", "pr", "review", "cicd", "postmortem",
 ];
 
+/** The four kinds of work. Each owns one arc of the ring, next to the systems it works with:
+ *  understand by the watcher and live system, stop-the-damage under on-call, fix-for-good by GitHub and the sandbox. */
+export const CATEGORIES: { id: string; label: string; hint: string; agents: AgentId[] }[] = [
+  { id: "contain", label: "Stop the damage", hint: "every change waits for you", agents: ["plan", "mitigation", "verify"] },
+  { id: "fix", label: "Fix for good", hint: "sandbox, then a pull request", agents: ["fix", "test", "pr", "review", "cicd"] },
+  { id: "learn", label: "Learn", hint: "so next time is faster", agents: ["postmortem", "docs"] },
+  { id: "understand", label: "Understand", hint: "what broke and why", agents: ["triage", "diagnosis", "validation"] },
+];
+export const CATEGORY_OF: Record<string, string> = Object.fromEntries(CATEGORIES.flatMap((c) => c.agents.map((a) => [a, c.id])));
+
+/** Agents sit on the ring grouped by category, with a gap between categories; one gap is centred at the top,
+ *  under on-call, so no agent covers it. Angles in degrees, SVG orientation (0 = right, 90 = down). */
+const GAP = 0.5;      // between categories, in agent slots
+const TOP_GAP = 1.4;  // the gap under on-call (Understand → Stop the damage), wider so no agent sits below it
+const STEP = 360 / (AGENTS.length + GAP * (CATEGORIES.length - 1) + TOP_GAP);
+export const ARCS: { id: string; label: string; hint: string; from: number; to: number; agents: AgentId[] }[] = [];
 export const POS: Record<string, { x: number; y: number }> = {};
-AGENTS.forEach(({ id }, i) => {
-  const a = (Math.PI / 180) * (180 + (i * 360) / AGENTS.length);
-  POS[id] = { x: HUB.x + RING * Math.cos(a), y: HUB.y + RING * Math.sin(a) };
-});
+{
+  let cursor = 270 + (TOP_GAP * STEP) / 2;
+  for (const c of CATEGORIES) {
+    const from = cursor;
+    for (const id of c.agents) {
+      const a = (Math.PI / 180) * (cursor + STEP / 2);
+      POS[id] = { x: HUB.x + RING * Math.cos(a), y: HUB.y + RING * Math.sin(a) };
+      cursor += STEP;
+    }
+    ARCS.push({ ...c, from, to: cursor });
+    cursor += GAP * STEP;
+  }
+}
 POS.supervisor = HUB;
 
 export type SystemKey = "watcher" | "shop" | "human" | "github" | "sandbox" | "harness";
@@ -42,7 +67,7 @@ export const SYSTEMS: Record<SystemKey, { x: number; y: number; w: number; h: nu
   watcher: { x: 24, y: 110, w: 204, h: 64, label: "Watcher", sub: "always on · no AI · ₹0" },
   shop: { x: 24, y: 368, w: 204, h: 64, label: "Live system", sub: "logs · metrics · traces · docker" },
   human: { x: 498, y: 14, w: 204, h: 64, label: "On-call · Jira", sub: "approves every change" },
-  github: { x: 972, y: 232, w: 204, h: 64, label: "GitHub", sub: "commits · branches · PRs" },
+  github: { x: 972, y: 210, w: 204, h: 64, label: "GitHub", sub: "commits · branches · PRs" },
   sandbox: { x: 972, y: 500, w: 204, h: 64, label: "Daytona sandbox", sub: "runs the agents’ code" },
   harness: { x: 972, y: 716, w: 204, h: 64, label: "TrueForge harness", sub: "sub-agents · tool search" },
 };

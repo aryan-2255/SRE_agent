@@ -127,7 +127,7 @@ export default function Timeline() {
               </motion.div>
             )}
           </div>
-          <div className="scroll max-h-[124px] space-y-[5px] overflow-y-auto [@media(max-height:899px)]:max-h-[82px]">{lanes.map(lane)}</div>
+          <div className="scroll max-h-[104px] space-y-[5px] overflow-y-auto [@media(max-height:899px)]:max-h-[68px]">{lanes.map(lane)}</div>
         </div>
       )}
       <AnimatePresence>

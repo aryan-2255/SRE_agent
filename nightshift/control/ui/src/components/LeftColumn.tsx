@@ -81,7 +81,7 @@ export function Watcher() {
   return (
     <section className="panel flex min-h-[200px] flex-1 flex-col overflow-hidden">
       <PanelHead icon={<Pulse size={18} />} title="Watcher" sub="Every 5 s. Opens an incident only when a service stays over its limit."
-        right={<span className="rounded-md px-2 py-0.5 text-[11.5px] font-semibold uppercase tracking-[0.08em]"
+        right={<span className="whitespace-nowrap rounded-md px-2 py-0.5 text-[11.5px] font-semibold uppercase tracking-[0.08em]"
           style={{ background: breach ? "var(--red-soft)" : "var(--go-soft)", color: breach ? "var(--red-ink)" : "var(--go-ink)" }}>{breach ? "Breach" : "Rules · no AI"}</span>} />
       <ul className="scroll m-0 min-h-0 flex-1 list-none overflow-y-auto p-0 pb-2">
         {rows.length ? rows.map(([n, r]) => <ServiceRow key={n} name={n} s={r} history={s.history[n] || []} />)

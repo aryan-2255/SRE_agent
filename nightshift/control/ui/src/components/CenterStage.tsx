@@ -7,7 +7,7 @@ import { useEngine } from "../engine/useEngine";
 import { AGENTS, INFO, SYSTEMS, WHO, systemFor, type SystemKey } from "../engine/constants";
 import { mmss, ease } from "../lib/format";
 
-function Legend() {
+function Legend({ compact }: { compact?: boolean }) {
   const Dot = ({ c, ring }: { c: string; ring?: boolean }) => (
     <span className="inline-block size-2.5 rounded-full" style={ring ? { boxShadow: `inset 0 0 0 2px ${c}` } : { background: c }} />
   );
@@ -16,9 +16,17 @@ function Legend() {
     [<Dot c="var(--go)" />, "working"], [<Dot c="var(--amber)" />, "needs a human"], [<Dot c="var(--go)" ring />, "done"],
     [<Dot c="var(--red)" />, "failed"], [<Bar c="var(--sup)" />, "supervisor routing"], [<Bar c="var(--data)" />, "tool call"],
   ];
+  if (compact) {
+    // narrow screens: the four states in one line next to the title
+    return (
+      <div className="flex min-w-0 items-center gap-3 overflow-hidden text-[12px] text-muted">
+        {items.slice(0, 4).map(([i, l]) => <span key={l} className="inline-flex items-center gap-1.5 whitespace-nowrap">{i}{l}</span>)}
+      </div>
+    );
+  }
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12.5px] text-muted">
-      {items.map(([i, l]) => <span key={l} className="inline-flex items-center gap-2">{i}{l}</span>)}
+    <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-xl bg-panel/85 px-3 py-2 text-[12px] text-muted backdrop-blur-sm">
+      {items.map(([i, l]) => <span key={l} className="inline-flex items-center gap-2 whitespace-nowrap">{i}{l}</span>)}
     </div>
   );
 }
@@ -119,7 +127,7 @@ function NowBar() {
   const c = TONE_COLOR[n.tone];
   const latest = s.incidents.find((i) => i.status === "resolved") || s.incidents[0];
   return (
-    <div className="flex h-16 shrink-0 items-center gap-3 border-t border-line px-5">
+    <div className="flex h-[52px] shrink-0 items-center gap-3 border-t border-line px-5">
       <span className="relative inline-flex size-2.5 shrink-0">
         {n.tone !== "idle" && <span className="ns-ping absolute inset-0 rounded-full" style={{ background: c }} />}
         <span className="relative size-2.5 rounded-full" style={{ background: c }} />
@@ -149,13 +157,15 @@ export default function CenterStage() {
   const [hover, setHover] = useState<Hover>(null);
   return (
     <section className="panel flex min-h-0 min-w-0 flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center gap-4 px-5 pt-4">
+      <div className="flex shrink-0 items-center gap-4 px-5 pt-3">
         <h2 className="m-0 shrink-0 whitespace-nowrap text-[15px] font-semibold">Agent network</h2>
-        <Legend />
+        <div className="min-w-0 min-[1700px]:hidden"><Legend compact /></div>
         <FollowToggle />
       </div>
-      <div className="relative min-h-0 flex-1 px-2">
+      <div className="relative min-h-0 flex-1 px-1">
         <NetworkMap onHover={setHover} />
+        {/* the legend sits in the map's empty bottom-left corner, so the network gets the height */}
+        <div className="pointer-events-none absolute bottom-2 left-3 max-[1699px]:hidden"><Legend /></div>
       </div>
       <NowBar />
       <AnimatePresence>{hover && <HoverCard key={hover.id} h={hover} />}</AnimatePresence>

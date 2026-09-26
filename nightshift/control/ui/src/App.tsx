@@ -37,7 +37,7 @@ export default function App() {
       <Header onMenu={() => setDrawer(true)} />
       <BlindBanner />
       <StageRail />
-      <main className="grid min-h-0 grid-cols-[clamp(250px,17.5vw,340px)_minmax(0,1fr)_clamp(300px,22vw,430px)] gap-3 p-3 min-[1700px]:gap-4 min-[1700px]:p-4">
+      <main className="grid min-h-0 grid-cols-[clamp(236px,16.5vw,330px)_minmax(0,1fr)_clamp(292px,21vw,420px)] gap-3 p-3 min-[1700px]:gap-4 min-[1700px]:p-4">
         <aside className="flex min-h-0 flex-col gap-3 min-[1700px]:gap-4">
           <Watcher />
           <SyntheticCustomer />

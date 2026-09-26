@@ -38,7 +38,7 @@ npm run build      # writes dist/, which FastAPI serves at http://localhost:8090
 - **One meaning per color:** green `--go` working or healthy, amber `--amber` a human is needed (nothing else is amber), red `--red` failing, blue `--data` tool calls and data, `--sup` the supervisor. Text on colored meaning uses the `-ink` variant (readable on light).
 - **Style only through tokens** (`bg-panel`, `text-ink-2`, `var(--line)` …), so both themes stay correct. Themes: `?theme=light|dark`, or the header toggle.
 - **Motion explains state** (routing, tool calls, a new message, the approval). Animate `transform` and `opacity` only; ease-out `cubic-bezier(0.23,1,0.32,1)`; every loop has a `prefers-reduced-motion` fallback in `index.css`.
-- **The map geometry is fixed** (`HUB`, `RING`, `SYSTEMS`, agent order). Change styling, not positions.
+- **The map is grouped by kind of work** (`CATEGORIES` and `ARCS` in `constants.ts`): Understand (top left, by the watcher and live system), Stop the damage (top right, under on-call), Fix for good (right, by GitHub and the sandbox), Learn (bottom left). Each category is an arc with a tag inside the ring; it turns green while one of its agents works and amber while one waits for you. A wider gap at the top keeps on-call clear. Agent names sit outside their node, pointing away from the hub, so neighbours never collide. Change styling freely; if you move positions, re-check labels against the system boxes.
 - **Check three sizes in both themes** before merging: 1280×800, 1440×900, 1920×1080. Use height media queries (`[@media(max-height:899px)]:…`) for short screens; `max-[…]` is a width breakpoint.
 
 ## Demo helpers
