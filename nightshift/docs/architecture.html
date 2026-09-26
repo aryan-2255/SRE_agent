@@ -1,0 +1,774 @@
+<title>NightShift</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;600;700;800&family=Atkinson+Hyperlegible+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --page: #FFFFFF;
+  --ink: #15191E;
+  --ink-2: #3A424C;
+  --muted: #5E6773;
+  --line: #E3E6EA;
+  --line-2: #CDD2D8;
+  --soft: #F5F6F8;
+  --go: #0B7A4B;       --go-soft: #E6F4EC;
+  --hum: #B25A00;      --hum-soft: #FDF1E3;
+  --bad: #BF3328;      --bad-soft: #FCEAE8;
+  --data: #1D5FBF;     --data-soft: #E8F0FB;
+  --sans: "Atkinson Hyperlegible Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "Atkinson Hyperlegible Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 17px/1.62 var(--sans); }
+a { color: var(--data); text-underline-offset: 2px; }
+code { font-family: var(--mono); font-size: .88em; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; line-height: 1.15; text-wrap: balance; letter-spacing: -.01em; }
+h1 { font-size: clamp(40px, 6vw, 64px); font-weight: 800; letter-spacing: -.025em; }
+h2 { font-size: clamp(25px, 3vw, 32px); font-weight: 800; }
+h3 { font-size: 19px; font-weight: 700; }
+.label { font: 600 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+
+.shell { max-width: 1180px; margin: 0 auto; padding: 40px 20px 80px; display: grid; gap: 36px; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14.5px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+nav.toc .label { width: 100%; margin-bottom: 2px; }
+nav.toc a { color: var(--ink-2); text-decoration: none; }
+nav.toc a:hover { color: var(--ink); text-decoration: underline; }
+@media (min-width: 1500px) {
+  .shell { max-width: 1440px; grid-template-columns: 190px minmax(0, 1fr); gap: 56px; padding-top: 48px; }
+  nav.toc { position: sticky; top: calc(24px + env(safe-area-inset-top, 0px)); align-self: start; display: grid; gap: 2px;
+    padding-bottom: 0; border-bottom: 0; font-size: 14px; }
+  nav.toc .label { margin-bottom: 8px; }
+  nav.toc a { padding: 4px 0 4px 10px; border-left: 2px solid var(--line); }
+  nav.toc a:hover { border-left-color: var(--ink); text-decoration: none; }
+}
+main { display: grid; gap: 72px; min-width: 0; }
+section { display: grid; gap: 20px; scroll-margin-top: 24px; }
+.prose { display: grid; gap: 14px; max-width: 68ch; }
+.prose p { color: var(--ink-2); }
+
+/* header */
+header.top { display: grid; gap: 18px; padding-bottom: 36px; border-bottom: 1px solid var(--line); }
+header.top .kicker { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+header.top .lede { font-size: clamp(19px, 2.2vw, 22px); line-height: 1.5; color: var(--ink-2); max-width: 44ch; }
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.facts div { padding: 14px 16px; display: grid; gap: 2px; border-right: 1px solid var(--line); }
+.facts div:last-child { border-right: 0; }
+.facts b { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.facts span { font-size: 13.5px; color: var(--muted); line-height: 1.4; }
+.links { display: flex; gap: 18px; flex-wrap: wrap; font-size: 15px; }
+
+/* status pills */
+.st { display: inline-block; font: 600 11.5px var(--mono); letter-spacing: .03em; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.st.live { background: var(--go-soft); color: var(--go); }
+.st.built { background: var(--data-soft); color: var(--data); }
+.st.plan { background: var(--soft); color: var(--muted); border: 1px dashed var(--line-2); }
+
+/* figures */
+figure { margin: 0; display: grid; gap: 10px; }
+.fig { border: 1px solid var(--line); border-radius: 14px; padding: 14px; overflow-x: auto; background: var(--page); }
+.fig svg { display: block; width: 100%; height: auto; }
+.fig.w-1000 svg { min-width: 900px; }
+.fig.w-800 svg { min-width: 720px; }
+.fig.w-600 svg { min-width: 560px; }
+figcaption { font-size: 15px; color: var(--muted); max-width: 80ch; }
+svg text { font-family: var(--sans); }
+svg .t { font-size: 14px; font-weight: 700; fill: var(--ink); }
+svg .s { font-size: 12px; fill: var(--muted); }
+svg .m { font-family: var(--mono); font-size: 11.5px; fill: var(--ink-2); }
+svg .cap { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; fill: var(--muted); }
+svg .el { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+svg .el-h { font-family: var(--mono); font-size: 11px; fill: var(--hum); font-weight: 600; }
+svg .el-d { font-family: var(--mono); font-size: 11px; fill: var(--data); font-weight: 600; }
+svg .el-g { font-family: var(--mono); font-size: 11px; fill: var(--go); font-weight: 600; }
+svg .box { fill: var(--page); stroke: var(--line-2); stroke-width: 1.3; }
+svg .soft { fill: var(--soft); stroke: var(--line-2); stroke-width: 1.2; }
+svg .zone { fill: none; stroke: var(--line-2); stroke-width: 1.2; stroke-dasharray: 5 5; }
+svg .tf { fill: #FAFBFC; stroke: var(--ink); stroke-width: 1.4; }
+svg .ag { fill: var(--page); stroke: var(--go); stroke-width: 1.6; }
+svg .ag-built { fill: var(--page); stroke: var(--data); stroke-width: 1.6; stroke-dasharray: 4 3; }
+svg .hub { fill: var(--ink); }
+svg .hub-t { font-size: 14px; font-weight: 800; fill: #fff; }
+svg .hub-s { font-size: 11px; fill: #C9CED4; }
+svg .hum { fill: var(--hum-soft); stroke: var(--hum); stroke-width: 1.4; }
+svg .bad { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.4; }
+svg .ok { fill: var(--go-soft); stroke: var(--go); stroke-width: 1.4; }
+svg .dat { fill: var(--data-soft); stroke: var(--data); stroke-width: 1.4; }
+svg .ar { fill: none; stroke: var(--ink-2); stroke-width: 1.4; marker-end: url(#a); }
+svg .ar-h { fill: none; stroke: var(--hum); stroke-width: 1.6; stroke-dasharray: 6 4; marker-end: url(#ah); }
+svg .ar-d { fill: none; stroke: var(--data); stroke-width: 1.4; marker-end: url(#ad); }
+svg .ar-g { fill: none; stroke: var(--go); stroke-width: 1.5; marker-end: url(#ag); }
+svg .ar-b { fill: none; stroke: var(--bad); stroke-width: 1.5; stroke-dasharray: 5 4; marker-end: url(#ab); }
+svg .spoke { stroke: var(--line-2); stroke-width: 1.1; }
+svg .grid { stroke: var(--line); stroke-width: 1; }
+svg .thr { stroke: var(--bad); stroke-width: 1.4; stroke-dasharray: 6 4; }
+svg .ln { fill: none; stroke: var(--data); stroke-width: 2.2; stroke-linejoin: round; }
+svg .area { fill: var(--data-soft); }
+svg .win { fill: var(--hum-soft); }
+
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 600 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--soft); }
+td.nm { font-weight: 700; white-space: nowrap; }
+td.m { font-family: var(--mono); font-size: 13px; color: var(--ink-2); }
+td.t { font-family: var(--mono); font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+tr.hl td { background: var(--hum-soft); }
+tr.dec td { background: #FAFBFC; }
+.gate { font: 600 12.5px var(--mono); color: var(--hum); }
+
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.card { border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 8px; align-content: start; }
+.card p, .card li { font-size: 15.5px; color: var(--ink-2); }
+.card ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.two { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 18px; align-items: start; }
+pre { margin: 0; background: var(--soft); border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow-x: auto; font: 13px/1.6 var(--mono); color: var(--ink); }
+pre .c { color: var(--muted); }
+pre .k { color: var(--data); }
+ol.steps { margin: 0; padding: 0; list-style: none; display: grid; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+ol.steps li { display: grid; grid-template-columns: 48px 1fr; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); font-size: 15.5px; color: var(--ink-2); }
+ol.steps li:last-child { border-bottom: 0; }
+ol.steps .n { font: 700 13px var(--mono); color: var(--muted); }
+.quote { border-left: 3px solid var(--ink); padding: 2px 0 2px 14px; color: var(--ink-2); font-size: 16px; }
+footer { border-top: 1px solid var(--line); padding-top: 22px; color: var(--muted); font-size: 14.5px; display: grid; gap: 6px; }
+
+@media (max-width: 980px) {
+  .two { grid-template-columns: 1fr; }
+  .cards { grid-template-columns: 1fr; }
+  .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .facts div:nth-child(2) { border-right: 0; }
+  .facts div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+}
+@media (max-width: 480px) {
+  body { font-size: 16px; }
+  .facts { grid-template-columns: 1fr; }
+  .facts div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .facts div:last-child { border-bottom: 0; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#3A424C"/></marker>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#B25A00"/></marker>
+    <marker id="ad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1D5FBF"/></marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#0B7A4B"/></marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#BF3328"/></marker>
+  </defs>
+</svg>
+
+<div class="shell">
+<nav class="toc" aria-label="Contents">
+  <span class="label">On this page</span>
+  <a href="#what">What it does</a>
+  <a href="#system">The whole system</a>
+  <a href="#incident">A real incident</a>
+  <a href="#watcher">When agents wake up</a>
+  <a href="#supervisor">The supervisor</a>
+  <a href="#talk">Agents talking</a>
+  <a href="#agents">The 14 agents</a>
+  <a href="#paths">Four kinds of incident</a>
+  <a href="#tools">Tools and connectors</a>
+  <a href="#safety">Safety and approvals</a>
+  <a href="#runs">Where it runs</a>
+  <a href="#room">The operations room</a>
+  <a href="#rules">Hackathon rules</a>
+  <a href="#status">What's done, what isn't</a>
+  <a href="#start">Run it</a>
+</nav>
+
+<main>
+<header class="top">
+  <div class="kicker"><span class="label">Agents That Act · TrueFoundry × Polaris · Bengaluru · 26 Sep 2026</span></div>
+  <h1>NightShift</h1>
+  <p class="lede">An on-call team of AI agents on TrueForge. It watches a live system for free, wakes up only for a real incident, finds the cause, asks a person before changing anything, and fixes it.</p>
+  <div class="facts" aria-label="Measured results">
+    <div><b>2 min 52 s</b><span>real incident, detected to resolved, on the live shop</span></div>
+    <div><b>₹20</b><span>model cost of that incident ($0.23)</span></div>
+    <div><b>10.8 s</b><span>rollback of a service, no rebuild</span></div>
+    <div><b>2.9 s</b><span>from “/approve” on Jira to the agent continuing</span></div>
+  </div>
+  <div class="links">
+    <a href="https://github.com/aryan-2255/SRE_agent" target="_blank" rel="noopener">github.com/aryan-2255/SRE_agent</a>
+    <span class="muted">Status on this page: <span class="st live">verified live</span> <span class="st built">built, not yet run live</span> <span class="st plan">planned</span></span>
+  </div>
+</header>
+
+<!-- WHAT -->
+<section id="what">
+  <span class="label">What it does</span>
+  <h2>The 3 AM problem</h2>
+  <div class="prose">
+    <p>When production breaks at night, someone gets woken up, reads logs half asleep, guesses a cause, and changes things under pressure. NightShift does the first hour of that work: it notices the problem, reads the logs, traces and recent code changes, proves what went wrong, and prepares the fix. It never changes production on its own. Every risky step waits for a person to say yes on Jira or on the dashboard.</p>
+    <p>It is built on <b>TrueForge</b>, TrueFoundry’s open-source agent harness, unmodified. Each agent is a saved TrueForge agent with its own model, tools and approval list. TrueForge runs them, pauses them for approvals, runs their code in a Daytona sandbox, and records every step.</p>
+    <p>The system it protects today is the <b>OpenTelemetry Astronomy Shop</b>: a real online shop of 31 Docker containers in many languages, with live traffic. Nothing in the agents is specific to this shop. A different system needs a different onboarding file, not different agents.</p>
+  </div>
+</section>
+
+<!-- SYSTEM -->
+<section id="system">
+  <span class="label">The whole system</span>
+  <h2>One free watcher, fourteen agents, one door to the system</h2>
+  <figure>
+    <div class="fig w-1000">
+      <svg viewBox="0 0 1120 612" role="img" aria-label="The live shop sends signals to a no-AI watcher. The watcher opens incidents in NightShift control, which runs agents inside TrueForge. A supervisor sits at the centre of thirteen agents. Agents reach the shop only through the nightshift-ops MCP server, and also use GitHub, the Daytona sandbox and models on Amazon Bedrock. Approvals go to the on-call person through Jira or the dashboard.">
+        <!-- left: system + watcher + control -->
+        <rect class="soft" x="20" y="40" width="210" height="150" rx="12"/>
+        <text class="cap" x="36" y="64">THE LIVE SYSTEM</text>
+        <text class="t" x="36" y="90">Astronomy Shop</text>
+        <text class="s" x="36" y="110">31 Docker containers</text>
+        <text class="s" x="36" y="128">logs · metrics · traces</text>
+        <text class="s" x="36" y="146">Prometheus · OpenSearch · Jaeger</text>
+        <text class="s" x="36" y="170">real + synthetic traffic</text>
+
+        <rect class="ok" x="20" y="250" width="210" height="96" rx="12"/>
+        <text class="cap" x="36" y="274">ALWAYS ON · NO AI · ₹0</text>
+        <text class="t" x="36" y="298">Watcher</text>
+        <text class="s" x="36" y="318">error % per service, every 5 s</text>
+        <text class="s" x="36" y="334">synthetic customer, every 30 s</text>
+
+        <rect class="box" x="20" y="410" width="210" height="110" rx="12"/>
+        <text class="cap" x="36" y="434">OUR CODE</text>
+        <text class="t" x="36" y="458">NightShift control</text>
+        <text class="s" x="36" y="478">incident queue and state</text>
+        <text class="s" x="36" y="494">runs agents through the SDK</text>
+        <text class="s" x="36" y="510">dashboard · Jira approval bridge</text>
+
+        <path class="ar" d="M125 190 V246"/><text class="el" x="133" y="224">signals</text>
+        <path class="ar" d="M125 346 V406"/><text class="el" x="133" y="382">incident</text>
+
+        <!-- ops mcp -->
+        <rect class="dat" x="262" y="70" width="176" height="92" rx="12"/>
+        <text class="cap" x="278" y="94">THE ONE DOOR</text>
+        <text class="t" x="278" y="118">nightshift-ops MCP</text>
+        <text class="s" x="278" y="138">19 tools · token · redacts</text>
+        <text class="s" x="278" y="154">personal data</text>
+        <path class="ar-d" d="M262 116 H234"/><text class="el-d" x="248" y="108" text-anchor="middle">acts</text>
+
+        <!-- TrueForge -->
+        <rect class="tf" x="470" y="24" width="420" height="552" rx="16"/>
+        <text class="cap" x="490" y="50">TRUEFORGE · UNMODIFIED</text>
+        <text class="el" x="870" y="50" text-anchor="end">one session per agent</text>
+
+        <!-- ring of agents: centre 680,300 r 175 -->
+        <g>
+          <line class="spoke" x1="680" y1="300" x2="505" y2="300"/>
+          <line class="spoke" x1="680" y1="300" x2="521.2" y2="226.6"/>
+          <line class="spoke" x1="680" y1="300" x2="566.2" y2="167.4"/>
+          <line class="spoke" x1="680" y1="300" x2="625.5" y2="133.7"/>
+          <line class="spoke" x1="680" y1="300" x2="693.5" y2="125.5"/>
+          <line class="spoke" x1="680" y1="300" x2="761.2" y2="144.9"/>
+          <line class="spoke" x1="680" y1="300" x2="826.2" y2="195.7"/>
+          <line class="spoke" x1="680" y1="300" x2="853.3" y2="279.8"/>
+          <line class="spoke" x1="680" y1="300" x2="843.2" y2="367.0"/>
+          <line class="spoke" x1="680" y1="300" x2="798.8" y2="428.6"/>
+          <line class="spoke" x1="680" y1="300" x2="733.1" y2="466.8"/>
+          <line class="spoke" x1="680" y1="300" x2="659.8" y2="473.8"/>
+          <line class="spoke" x1="680" y1="300" x2="591.4" y2="451.0"/>
+        </g>
+        <circle class="hub" cx="680" cy="300" r="50"/>
+        <text class="hub-t" x="680" y="298" text-anchor="middle">Supervisor</text>
+        <text class="hub-s" x="680" y="315" text-anchor="middle">Kimi K3</text>
+
+        <g font-size="12.5">
+          <circle class="ag" cx="505" cy="300" r="18"/><text class="s" x="505" y="336" text-anchor="middle" style="fill:#15191E;font-weight:700">Triage</text>
+          <circle class="ag" cx="521.2" cy="226.6" r="18"/><text class="s" x="521.2" y="200" text-anchor="middle" style="fill:#15191E;font-weight:700">Diagnosis</text>
+          <circle class="ag-built" cx="566.2" cy="167.4" r="18"/><text class="s" x="566.2" y="141" text-anchor="middle">Validation</text>
+          <circle class="ag" cx="625.5" cy="133.7" r="18"/><text class="s" x="610" y="106" text-anchor="middle" style="fill:#15191E;font-weight:700">Planner</text>
+          <circle class="ag" cx="693.5" cy="125.5" r="18"/><text class="s" x="700" y="98" text-anchor="middle" style="fill:#15191E;font-weight:700">Mitigation</text>
+          <circle class="ag" cx="761.2" cy="144.9" r="18"/><text class="s" x="776" y="118" text-anchor="middle" style="fill:#15191E;font-weight:700">Verify</text>
+          <circle class="ag-built" cx="826.2" cy="195.7" r="18"/><text class="s" x="826.2" y="169" text-anchor="middle">Coder</text>
+          <circle class="ag-built" cx="853.3" cy="279.8" r="18"/><text class="s" x="853.3" y="253" text-anchor="middle">Tester</text>
+          <circle class="ag-built" cx="843.2" cy="367" r="18"/><text class="s" x="843.2" y="403" text-anchor="middle">Pull request</text>
+          <circle class="ag-built" cx="798.8" cy="428.6" r="18"/><text class="s" x="798.8" y="464" text-anchor="middle">Reviewer</text>
+          <circle class="ag-built" cx="733.1" cy="466.8" r="18"/><text class="s" x="733.1" y="503" text-anchor="middle">CI/CD · canary</text>
+          <circle class="ag" cx="659.8" cy="473.8" r="18"/><text class="s" x="645" y="510" text-anchor="middle" style="fill:#15191E;font-weight:700">Postmortem</text>
+          <circle class="ag-built" cx="591.4" cy="451" r="18"/><text class="s" x="566" y="487" text-anchor="middle">Docs research</text>
+        </g>
+        <text class="el" x="490" y="560">solid ring: ran live · dashed: built, not yet run live</text>
+
+        <path class="ar" d="M230 460 H320 V300 H466"/><text class="el" x="328" y="292">starts agents</text>
+        <path class="ar-d" d="M470 136 H442"/><text class="el-d" x="456" y="152" text-anchor="middle">tools</text>
+
+        <!-- right side -->
+        <rect class="box" x="920" y="40" width="180" height="80" rx="12"/>
+        <text class="t" x="936" y="68">GitHub</text>
+        <text class="s" x="936" y="88">aryan-2255/SRE_agent</text>
+        <text class="s" x="936" y="104">commits · branches · PRs</text>
+
+        <rect class="box" x="920" y="150" width="180" height="80" rx="12"/>
+        <text class="t" x="936" y="178">Daytona sandbox</text>
+        <text class="s" x="936" y="198">runs the agents’ code</text>
+        <text class="s" x="936" y="214">no secrets inside</text>
+
+        <rect class="box" x="920" y="260" width="180" height="80" rx="12"/>
+        <text class="t" x="936" y="288">Amazon Bedrock</text>
+        <text class="s" x="936" y="308">MiniMax M2.5 · small</text>
+        <text class="s" x="936" y="324">Kimi K3 · strong</text>
+
+        <rect class="hum" x="920" y="400" width="180" height="96" rx="12"/>
+        <text class="cap" x="936" y="424">A PERSON</text>
+        <text class="t" x="936" y="448">On-call engineer</text>
+        <text class="s" x="936" y="468">/approve on Jira</text>
+        <text class="s" x="936" y="484">or Approve on dashboard</text>
+
+        <path class="ar" d="M890 80 H916"/>
+        <path class="ar" d="M890 190 H916"/>
+        <path class="ar" d="M890 300 H916"/>
+        <path class="ar-h" d="M890 448 H916"/>
+        <path class="ar-h" d="M1010 496 V598 H125 V524"/><text class="el-h" x="1000" y="592" text-anchor="end">decision returns to control, which resumes the paused agent</text>
+      </svg>
+    </div>
+    <figcaption>The watcher and control are plain code, so a quiet system costs nothing. Agents never touch the shop directly: every read and every change goes through the <code>nightshift-ops</code> MCP server, which masks personal data and marks every changing tool so TrueForge pauses it for a person.</figcaption>
+  </figure>
+</section>
+
+<!-- INCIDENT -->
+<section id="incident">
+  <span class="label">A real incident</span>
+  <h2>INC-001, minute by minute</h2>
+  <div class="prose"><p>This is a real run on the live shop, not a mock-up. We switched on one of the shop’s built-in failure switches, <code>paymentFailure = 50%</code>, so half of all card payments failed. No code was changed; the agents had to work that out themselves.</p></div>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Time</th><th>Who</th><th>What happened</th></tr></thead>
+      <tbody>
+        <tr><td class="t">0:00</td><td class="nm">Watcher</td><td>Payment errors at 75% for 30 s (limit 5%). Opens INC-001. Checkout was failing too, so it is recorded as a symptom of payment, not a second incident.</td></tr>
+        <tr><td class="t">0:30</td><td class="nm">Triage</td><td>“Payment error rate at 42.86% (threshold 5%) caused by paymentFailure flag set to 50%.”</td></tr>
+        <tr class="dec"><td class="t">0:33</td><td class="nm">Supervisor</td><td>Run diagnosis: “Triage confirms a real flag-related incident, so diagnosis is the natural next step.”</td></tr>
+        <tr><td class="t">0:52</td><td class="nm">Diagnosis</td><td>Read real logs and traces; confirmed the flag as the cause.</td></tr>
+        <tr class="dec"><td class="t">0:55</td><td class="nm">Supervisor</td><td>Run plan: “Diagnosis is high-confidence and uncontested.” It <b>skipped</b> the sandbox check, because the cause is a switch, not code.</td></tr>
+        <tr><td class="t">1:07</td><td class="nm">Planner</td><td>Turn the flag off. Opens Jira ticket SRE-2 with the cause, evidence and options.</td></tr>
+        <tr class="hl"><td class="t">1:16</td><td class="nm">Mitigation</td><td>Asks to run <code>set_flag(paymentFailure, off)</code>. TrueForge pauses. A person approves.</td></tr>
+        <tr><td class="t">1:23</td><td class="nm">Mitigation</td><td>Flag off.</td></tr>
+        <tr><td class="t">1:59</td><td class="nm">Verify</td><td>“Error rate dropped from about 100% to 0%; synthetic checkout passes.”</td></tr>
+        <tr class="dec"><td class="t">2:15</td><td class="nm">Supervisor</td><td>Run postmortem: “Recovery is verified and no code fix is needed.” It <b>skipped</b> coder, tester, PR, review and canary.</td></tr>
+        <tr><td class="t">2:52</td><td class="nm">Supervisor</td><td>Finish. Postmortem written, Jira closed. Total model cost $0.23 (₹20).</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="font-size:15px">Grey rows are the supervisor’s own decisions, quoted as it wrote them. The amber row waited for a human.</p>
+</section>
+
+<!-- WATCHER -->
+<section id="watcher">
+  <span class="label">When the agents wake up</span>
+  <h2>One bad minute is not an incident</h2>
+  <div class="two">
+    <figure>
+      <div class="fig w-600">
+        <svg viewBox="0 0 720 260" role="img" aria-label="Illustration of a service's error rate over ten minutes. A single spike at minute 2 is ignored because it falls back quickly. From minute 6 the error rate stays above the 5% line; after staying above it, the incident opens and agents start.">
+          <rect class="win" x="432" y="30" width="124" height="170"/>
+          <line class="grid" x1="60" y1="157.5" x2="680" y2="157.5"/>
+          <line class="grid" x1="60" y1="115" x2="680" y2="115"/>
+          <line class="grid" x1="60" y1="72.5" x2="680" y2="72.5"/>
+          <line class="grid" x1="60" y1="30" x2="680" y2="30"/>
+          <polygon class="area" points="60,195.75 122,194.9 153,195.75 184,123.5 215,194.9 246,195.75 308,196.6 370,195.3 401,195.75 432,161.75 463,110.75 494,85.25 525,76.75 556,72.5 618,68.25 680,72.5 680,200 60,200"/>
+          <polyline class="ln" points="60,195.75 122,194.9 153,195.75 184,123.5 215,194.9 246,195.75 308,196.6 370,195.3 401,195.75 432,161.75 463,110.75 494,85.25 525,76.75 556,72.5 618,68.25 680,72.5"/>
+          <line class="thr" x1="60" y1="178.75" x2="680" y2="178.75"/>
+          <line x1="60" y1="200" x2="680" y2="200" stroke="#5E6773"/>
+          <line x1="556" y1="30" x2="556" y2="200" stroke="#B25A00" stroke-width="1.4" stroke-dasharray="4 4"/>
+          <circle cx="184" cy="123.5" r="4" fill="#1D5FBF"/>
+          <circle cx="556" cy="72.5" r="5" fill="#BF3328"/>
+          <text class="el" x="194" y="118">one bad minute · ignored</text>
+          <text class="el-h" x="494" y="46" text-anchor="middle">over the line, and staying</text>
+          <text class="el" x="566" y="112" style="fill:#BF3328;font-weight:600">incident opens</text>
+          <text class="el" x="676" y="172" text-anchor="end" style="fill:#BF3328">5% limit</text>
+          <text class="el" x="52" y="204" text-anchor="end">0%</text>
+          <text class="el" x="52" y="161.5" text-anchor="end">10%</text>
+          <text class="el" x="52" y="119" text-anchor="end">20%</text>
+          <text class="el" x="52" y="76.5" text-anchor="end">30%</text>
+          <text class="el" x="52" y="34" text-anchor="end">40%</text>
+          <text class="el" x="60" y="222" text-anchor="middle">0</text>
+          <text class="el" x="184" y="222" text-anchor="middle">2</text>
+          <text class="el" x="308" y="222" text-anchor="middle">4</text>
+          <text class="el" x="432" y="222" text-anchor="middle">6</text>
+          <text class="el" x="556" y="222" text-anchor="middle">8</text>
+          <text class="el" x="680" y="222" text-anchor="middle">10 min</text>
+          <text class="el" x="60" y="248">error rate of one service (illustration)</text>
+        </svg>
+      </div>
+      <figcaption>The rule: over the service’s limit, with real traffic, for a set time: 2 minutes normally, 30 seconds in demo mode. In the demo the incident opened about 50 seconds after the break.</figcaption>
+    </figure>
+    <div class="card">
+      <h3>What the watcher checks <span class="st live">verified live</span></h3>
+      <ul>
+        <li>Error % and requests per second of every watched service, from Prometheus, every 5 seconds.</li>
+        <li>Each service has its own limit. The shop’s AI assistant normally fails 17% of the time, so its limit is 35%, not 5%.</li>
+        <li>A synthetic customer adds 5 items to a cart every 30 seconds and checks the cart really holds 5. That catches bugs that return “success” with the wrong answer.</li>
+      </ul>
+      <h3>Noise guards</h3>
+      <ul>
+        <li>Minimum traffic, so 1 failure in 2 requests is not “50%”.</li>
+        <li>If a service it depends on is failing too, the incident opens on that service, and the other is listed as a symptom.</li>
+        <li>The same service cannot open a new incident for 10 minutes.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- SUPERVISOR -->
+<section id="supervisor">
+  <span class="label">The supervisor</span>
+  <h2>An AI decides the next step. Code decides what is allowed.</h2>
+  <div class="prose"><p>There is no fixed pipeline. After every agent finishes, the supervisor reads what every agent has said so far and picks one move. Code then checks that move against rules it cannot break. The supervisor brings judgment; the rules bring safety.</p></div>
+  <figure>
+    <div class="fig w-1000">
+      <svg viewBox="0 0 1120 330" role="img" aria-label="The supervisor loop: an agent finishes and returns a JSON answer; code lists the moves allowed right now; the supervisor chooses one move with a reason; a guardrail check accepts it or replaces it with the rule-based choice; the move runs an agent, asks one a question, or sends work back; then the loop repeats until the supervisor finishes or escalates.">
+        <rect class="box" x="20" y="120" width="180" height="92" rx="12"/>
+        <text class="t" x="36" y="148">Agent finishes</text>
+        <text class="s" x="36" y="168">returns one JSON answer:</text>
+        <text class="s" x="36" y="184">summary, confidence,</text>
+        <text class="s" x="36" y="200">findings</text>
+
+        <rect class="box" x="250" y="120" width="190" height="92" rx="12"/>
+        <text class="cap" x="266" y="144">CODE</text>
+        <text class="t" x="266" y="166">Allowed moves now</text>
+        <text class="s" x="266" y="186">from what has already</text>
+        <text class="s" x="266" y="202">happened and the limits</text>
+
+        <rect x="490" y="112" width="200" height="108" rx="14" fill="#15191E"/>
+        <text class="cap" x="508" y="138" style="fill:#C9CED4">AI · KIMI K3</text>
+        <text x="508" y="162" font-size="15" font-weight="800" fill="#fff">Supervisor chooses</text>
+        <text x="508" y="182" font-size="12" fill="#C9CED4">one move + a reason a</text>
+        <text x="508" y="198" font-size="12" fill="#C9CED4">person can read</text>
+
+        <rect class="box" x="740" y="120" width="170" height="92" rx="12"/>
+        <text class="cap" x="756" y="144">CODE</text>
+        <text class="t" x="756" y="166">Guardrail check</text>
+        <text class="s" x="756" y="186">is the move allowed?</text>
+        <text class="s" x="756" y="202">if not: rule-based move</text>
+
+        <rect class="ok" x="960" y="104" width="140" height="124" rx="12"/>
+        <text class="t" x="976" y="130">The move</text>
+        <text class="m" x="976" y="152">run</text>
+        <text class="m" x="976" y="170">ask</text>
+        <text class="m" x="976" y="188">send_back</text>
+        <text class="m" x="976" y="206">escalate · finish</text>
+
+        <path class="ar" d="M200 166 H246"/>
+        <path class="ar" d="M440 166 H486"/>
+        <path class="ar" d="M690 166 H736"/>
+        <path class="ar" d="M910 166 H956"/>
+        <path class="ar" d="M1030 228 V290 H110 V216"/>
+        <text class="el" x="570" y="284" text-anchor="middle">the chosen agent runs in its own TrueForge session, and the loop repeats</text>
+        <path class="ar-b" d="M825 120 V70 H590 V108"/>
+        <text class="el" x="707" y="62" text-anchor="middle" style="fill:#BF3328">overruled moves are shown on the dashboard as “guardrail”</text>
+      </svg>
+    </div>
+  </figure>
+  <div class="two">
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Move</th><th>When the supervisor uses it</th></tr></thead>
+        <tbody>
+          <tr><td class="m">run</td><td>Start the next agent along the normal path.</td></tr>
+          <tr><td class="m">ask</td><td>An answer is weak or contradicts another; put a specific question to the agent that gave it.</td></tr>
+          <tr><td class="m">send_back</td><td>Return work with concrete feedback: the reviewer rejects a fix, or the sandbox could not reproduce the cause.</td></tr>
+          <tr><td class="m">escalate</td><td>Stop and hand over to a person, with the reason: external cause, conflicting evidence, limits reached.</td></tr>
+          <tr><td class="m">finish</td><td>Only after the service is verified as recovered.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Rules the supervisor cannot break</h3>
+      <ul>
+        <li>Planning needs a proven cause (a sandbox reproduction), unless the cause is a flag, config or capacity.</li>
+        <li>CI/CD needs passing tests <b>and</b> a reviewer’s approval of the latest fix.</li>
+        <li>Each agent has a run limit (diagnosis 3, mitigation 3, fix 3…); 24 steps in total.</li>
+        <li>A cost cap per incident; over it, escalate.</li>
+        <li>Human approval is enforced by TrueForge on every changing tool, whatever the supervisor decides.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- TALK -->
+<section id="talk">
+  <span class="label">Agents talking</span>
+  <h2>They question each other and send work back</h2>
+  <div class="prose"><p>An agent can be wrong. When one agent’s answer undermines another’s, the supervisor routes the disagreement to the agent that can resolve it, with the reason attached. These are the three conversations built into NightShift. <span class="st built">built, not yet seen live</span>: the flag incident above never needed them.</p></div>
+  <figure>
+    <div class="fig w-1000">
+      <svg viewBox="0 0 1120 340" role="img" aria-label="Three example conversations. One: diagnosis blames a commit, validation cannot reproduce it in the sandbox and sends it back to diagnosis with the reason. Two: the coder's fix is reviewed, the reviewer asks for changes, and the fix goes back to the coder with the comments. Three: the planner doubts the diagnosis, and the supervisor asks diagnosis a specific question.">
+        <text class="cap" x="20" y="28">1 · THE SANDBOX DISAGREES</text>
+        <rect class="ag" x="20" y="40" width="160" height="56" rx="10" style="fill:#fff"/><text class="t" x="36" y="64">Diagnosis</text><text class="s" x="36" y="82">“commit a1b2c3 broke it”</text>
+        <path class="ar" d="M180 68 H290"/><text class="el" x="235" y="60" text-anchor="middle">root cause</text>
+        <rect class="ag" x="294" y="40" width="200" height="56" rx="10" style="fill:#fff"/><text class="t" x="310" y="64">Validation · sandbox</text><text class="s" x="310" y="82">test passes: not reproduced</text>
+        <path class="ar-h" d="M494 68 H640"/><text class="el-h" x="567" y="60" text-anchor="middle">send_back</text>
+        <rect class="hum" x="644" y="40" width="456" height="56" rx="10"/><text class="t" x="660" y="64">“The failing requests all time out on Redis, not in charge.js.”</text><text class="s" x="660" y="82">Diagnosis runs again with this reason (at most 3 times, then escalate)</text>
+
+        <text class="cap" x="20" y="138">2 · THE REVIEWER REJECTS A FIX</text>
+        <rect class="ag" x="20" y="150" width="160" height="56" rx="10" style="fill:#fff"/><text class="t" x="36" y="174">Coder</text><text class="s" x="36" y="192">patch + tests pass</text>
+        <path class="ar" d="M180 178 H290"/><text class="el" x="235" y="170" text-anchor="middle">pull request</text>
+        <rect class="ag" x="294" y="150" width="200" height="56" rx="10" style="fill:#fff"/><text class="t" x="310" y="174">Reviewer</text><text class="s" x="310" y="192">verdict: changes</text>
+        <path class="ar-h" d="M494 178 H640"/><text class="el-h" x="567" y="170" text-anchor="middle">send_back</text>
+        <rect class="hum" x="644" y="150" width="456" height="56" rx="10"/><text class="t" x="660" y="174">“No test for a price of exactly ₹0.00.”</text><text class="s" x="660" y="192">Back to the coder; CI/CD stays locked until the reviewer approves</text>
+
+        <text class="cap" x="20" y="248">3 · A QUESTION BEFORE ACTING</text>
+        <rect class="ag" x="20" y="260" width="160" height="56" rx="10" style="fill:#fff"/><text class="t" x="36" y="284">Planner</text><text class="s" x="36" y="302">confidence 0.45</text>
+        <path class="ar" d="M180 288 H290"/><text class="el" x="235" y="280" text-anchor="middle">weak answer</text>
+        <rect x="294" y="260" width="200" height="56" rx="10" fill="#15191E"/><text x="310" y="284" font-size="14" font-weight="800" fill="#fff">Supervisor</text><text x="310" y="302" font-size="12" fill="#C9CED4">challenges it before acting</text>
+        <path class="ar-h" d="M494 288 H640"/><text class="el-h" x="567" y="280" text-anchor="middle">ask diagnosis</text>
+        <rect class="hum" x="644" y="260" width="456" height="56" rx="10"/><text class="t" x="660" y="284">“Is the Redis timeout a cause or a symptom?”</text><text class="s" x="660" y="302">Diagnosis answers and updates its finding; the supervisor decides again</text>
+      </svg>
+    </div>
+    <figcaption>Every question and send-back appears in the dashboard’s conversation panel, and as an amber line drawn between the two agents on the live map.</figcaption>
+  </figure>
+</section>
+
+<!-- AGENTS -->
+<section id="agents">
+  <span class="label">The 14 agents</span>
+  <h2>One job each, with only the tools that job needs</h2>
+  <div class="prose"><p>Each agent is saved in TrueForge. Routine steps use a fast, cheap model (MiniMax M2.5); reasoning, code and decisions use a stronger one (Kimi K3). Both run on Amazon Bedrock.</p></div>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Agent</th><th>Job</th><th>Model</th><th>Reaches</th><th>Pauses for a person before</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="nm">Supervisor</td><td>Chooses the next move after every step, with a reason</td><td>Kimi</td><td class="muted">no tools</td><td>–</td><td><span class="st live">live</span></td></tr>
+        <tr><td class="nm">Triage</td><td>Is it real? Severity, service, category</td><td>MiniMax</td><td>error rates, flags, deploys</td><td>–</td><td><span class="st live">live</span></td></tr>
+        <tr><td class="nm">Diagnosis</td><td>Root cause with evidence; can start parallel sub-agents</td><td>Kimi</td><td>logs, traces, deploys, GitHub</td><td>–</td><td><span class="st live">live</span></td></tr>
+        <tr><td class="nm">Validation</td><td>Tries to disprove the cause with a failing test</td><td>Kimi</td><td>sandbox, GitHub</td><td>–</td><td><span class="st built">built</span></td></tr>
+        <tr><td class="nm">Planner</td><td>2–3 options by reversibility; opens the Jira ticket</td><td>Kimi</td><td>deploys, flags</td><td>–</td><td><span class="st live">live</span></td></tr>
+        <tr><td class="nm">Mitigation</td><td>One reversible change: rollback, flag, restart, scale</td><td>MiniMax</td><td>ops tools</td><td class="gate">every change</td><td><span class="st live">live</span></td></tr>
+        <tr><td class="nm">Verify</td><td>Recovered? Error rates + synthetic checkout</td><td>MiniMax</td><td>error rates, traces</td><td>–</td><td><span class="st live">live</span></td></tr>
+        <tr><td class="nm">Coder</td><td>Smallest fix that makes the failing test pass</td><td>Kimi</td><td>sandbox, GitHub</td><td>–</td><td><span class="st built">built</span></td></tr>
+        <tr><td class="nm">Tester</td><td>Runs all tests on the fix in a clean sandbox</td><td>MiniMax</td><td>sandbox, GitHub</td><td>–</td><td><span class="st built">built</span></td></tr>
+        <tr><td class="nm">Pull request</td><td>Branch, push, open the PR on SRE_agent</td><td>MiniMax</td><td>GitHub</td><td class="gate">branch, push, PR</td><td><span class="st built">built</span></td></tr>
+        <tr><td class="nm">Reviewer</td><td>Reviews the diff; approves or asks for changes</td><td>Kimi</td><td>GitHub</td><td>–</td><td><span class="st built">built</span></td></tr>
+        <tr><td class="nm">CI/CD</td><td>Merge, 10% canary, compare, promote</td><td>MiniMax</td><td>GitHub, ops tools</td><td class="gate">merge, canary, promote</td><td><span class="st built">built</span></td></tr>
+        <tr><td class="nm">Postmortem</td><td>Blameless write-up; one team update</td><td>MiniMax</td><td>notify</td><td class="muted">team updates are auto-approved</td><td><span class="st live">live</span></td></tr>
+        <tr><td class="nm">Docs research</td><td>Official docs for a third-party provider (e.g. Razorpay)</td><td>Kimi</td><td>web search (not yet connected)</td><td>–</td><td><span class="st built">built</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="font-size:15px">“Live” means the agent handled the real incident above. The code-fix agents are configured and connected to the sandbox and GitHub but have not yet run a full incident end to end.</p>
+</section>
+
+<!-- PATHS -->
+<section id="paths">
+  <span class="label">Four kinds of incident</span>
+  <h2>Not every alert needs a code fix</h2>
+  <figure>
+    <div class="fig w-800">
+      <svg viewBox="0 0 1000 300" role="img" aria-label="Triage classifies each incident. A code regression takes the full path with sandbox proof, fix, pull request and canary. A config or flag change is reverted with one approval and no pull request. A capacity problem is scaled with one approval. An external or unreproducible cause is escalated to a person with no changes made.">
+        <rect class="box" x="20" y="122" width="120" height="56" rx="10"/>
+        <text class="t" x="80" y="147" text-anchor="middle">Incident</text><text class="s" x="80" y="165" text-anchor="middle">from the watcher</text>
+        <path class="ar" d="M140 150 H176"/>
+        <rect class="ag" x="180" y="122" width="130" height="56" rx="10" style="fill:#fff"/>
+        <text class="t" x="245" y="147" text-anchor="middle">Triage</text><text class="s" x="245" y="165" text-anchor="middle">classifies</text>
+        <path class="ar" d="M310 150 H350 V40 H392"/>
+        <path class="ar" d="M350 112 H392"/>
+        <path class="ar" d="M350 150 V184 H392"/>
+        <path class="ar" d="M350 184 V256 H392"/>
+        <line x1="350" y1="112" x2="350" y2="150" stroke="#3A424C" stroke-width="1.4"/>
+        <rect class="box" x="396" y="16" width="230" height="48" rx="10"/><text class="t" x="410" y="36">Code regression</text><text class="s" x="410" y="54">a recent commit broke it</text>
+        <rect class="box" x="396" y="88" width="230" height="48" rx="10"/><text class="t" x="410" y="108">Config or flag</text><text class="s" x="410" y="126">a setting changed (INC-001)</text>
+        <rect class="box" x="396" y="160" width="230" height="48" rx="10"/><text class="t" x="410" y="180">Capacity</text><text class="s" x="410" y="198">traffic spike, memory</text>
+        <rect class="box" x="396" y="232" width="230" height="48" rx="10"/><text class="t" x="410" y="252">External / can’t reproduce</text><text class="s" x="410" y="270">not in our code</text>
+        <path class="ar" d="M626 40 H672"/><path class="ar" d="M626 112 H672"/><path class="ar" d="M626 184 H672"/><path class="ar" d="M626 256 H672"/>
+        <rect class="ok" x="676" y="16" width="304" height="48" rx="10"/><text class="t" x="690" y="36">Full path</text><text class="s" x="690" y="54">prove in sandbox → fix → PR → review → canary</text>
+        <rect class="ok" x="676" y="88" width="304" height="48" rx="10"/><text class="t" x="690" y="108">Revert the setting</text><text class="s" x="690" y="126">1 approval · verify · no PR</text>
+        <rect class="ok" x="676" y="160" width="304" height="48" rx="10"/><text class="t" x="690" y="180">Scale or restart</text><text class="s" x="690" y="198">1 approval · verify · no PR</text>
+        <rect class="hum" x="676" y="232" width="304" height="48" rx="10"/><text class="t" x="690" y="252">Stop and escalate</text><text class="s" x="690" y="270">Jira + on-call · changes nothing</text>
+      </svg>
+    </div>
+    <figcaption>The supervisor follows these paths by default and can deviate within the rules. On INC-001 it took the second path on its own.</figcaption>
+  </figure>
+</section>
+
+<!-- TOOLS -->
+<section id="tools">
+  <span class="label">Tools and connectors</span>
+  <h2>What the agents can touch</h2>
+  <div class="cards">
+    <div class="card">
+      <h3>nightshift-ops <span class="st live">verified live</span></h3>
+      <p>Our MCP server, the only way into the running system. 19 tools, bearer token, every output masked for emails, card numbers and secrets.</p>
+      <p><b>Read:</b> <code>get_error_rates</code> <code>query_logs</code> <code>get_traces</code> <code>get_trace</code> <code>get_metrics</code> <code>get_recent_deploys</code> <code>get_flags</code> <code>list_services</code> <code>run_sql_readonly</code> <code>synthetic_check</code></p>
+      <p><b>Change (always paused):</b> <code>rollback</code> <code>deploy</code> <code>deploy_canary</code> <code>promote_canary</code> <code>restart_service</code> <code>scale_service</code> <code>set_flag</code> · plus <code>abort_canary</code>, <code>notify</code></p>
+    </div>
+    <div class="card">
+      <h3>TrueForge connectors <span class="st live">connected</span></h3>
+      <p><b>GitHub</b> (token for the team repo): read commits and files, create branches, push, open and review PRs, merge.</p>
+      <p><b>Jira</b> (Atlassian login): read and write issues. NightShift’s own approval bridge also uses Jira’s API to read <code>/approve</code> comments every 5 seconds.</p>
+    </div>
+    <div class="card">
+      <h3>Built into TrueForge</h3>
+      <p><b>Daytona sandbox</b>: agents run code there. Tested: it clones the repo, installs Node 24 and runs <code>npm ci</code> for the payment service.</p>
+      <p><b>Sub-agents</b>, <b>tool search</b>, <b>approval pauses</b>, <b>sessions</b> with every step and its cost.</p>
+    </div>
+  </div>
+  <div class="two">
+    <div class="prose">
+      <h3>Any system: one onboarding file</h3>
+      <p>The agents only know capabilities, such as “read logs” or “roll back”. The onboarding file says where each capability lives for this system. Adapters in <code>nightshift-ops</code> do the rest: Prometheus, OpenSearch, Jaeger, Docker Compose and flagd today. A system on CloudWatch, Datadog, Vercel or Render needs a new adapter, and the agents stay the same.</p>
+      <p>Platforms that ship their own MCP server (Supabase, Sentry, GitHub, Jira) are connected directly in TrueForge instead.</p>
+    </div>
+<pre><span class="c"># nightshift/systems/astronomy-shop.yaml (trimmed)</span>
+<span class="k">name:</span> astronomy-shop
+<span class="k">repo:</span>
+  url: github.com/aryan-2255/SRE_agent
+  subdir: astronomy-shop
+<span class="k">runtime:</span> { type: docker-compose }
+<span class="k">telemetry:</span>
+  metrics: { type: prometheus }
+  logs:    { type: opensearch }
+  traces:  { type: jaeger }
+<span class="k">services:</span>
+  payment:  { language: javascript,
+              slo: { max_error_pct: 5 } }
+  checkout: { depends_on: [payment, cart] }
+  agent:    { slo: { max_error_pct: 35 } }
+<span class="k">watch:</span> { for: 2m, demo_for: 30s }
+<span class="k">autonomy:</span>
+  auto: [notify]
+  ask:  [rollback, set_flag, deploy, …]
+  never: [drop_table, delete_data]</pre>
+  </div>
+</section>
+
+<!-- SAFETY -->
+<section id="safety">
+  <span class="label">Safety and approvals</span>
+  <h2>How a change gets approved</h2>
+  <figure>
+    <div class="fig w-1000">
+      <svg viewBox="0 0 1120 210" role="img" aria-label="Approval flow: an agent calls a changing tool; TrueForge pauses the call because the tool is on the agent's approval list; NightShift control shows an approval card on the dashboard and posts a comment on the Jira ticket; the on-call person approves or denies; control sends the decision to TrueForge, which runs or skips the tool.">
+        <rect class="ag" x="20" y="60" width="170" height="80" rx="12" style="fill:#fff"/><text class="t" x="36" y="88">Mitigation agent</text><text class="m" x="36" y="110">set_flag(</text><text class="m" x="36" y="126">  paymentFailure, off)</text>
+        <path class="ar" d="M190 100 H236"/>
+        <rect class="tf" x="240" y="60" width="190" height="80" rx="12"/><text class="t" x="256" y="88">TrueForge pauses</text><text class="s" x="256" y="108">the tool is on this agent’s</text><text class="s" x="256" y="124">approval list, by name</text>
+        <path class="ar" d="M430 100 H476"/>
+        <rect class="box" x="480" y="40" width="200" height="120" rx="12"/><text class="t" x="496" y="68">NightShift control</text><text class="s" x="496" y="90">approval card on dashboard</text><text class="s" x="496" y="108">comment on Jira SRE-2:</text><text class="m" x="496" y="126">Reply /approve or</text><text class="m" x="496" y="142">/deny &lt;reason&gt;</text>
+        <path class="ar-h" d="M680 100 H726"/>
+        <rect class="hum" x="730" y="60" width="170" height="80" rx="12"/><text class="t" x="746" y="88">On-call person</text><text class="s" x="746" y="108">Approve / Deny, or</text><text class="s" x="746" y="124">/approve in Jira</text>
+        <path class="ar-h" d="M900 100 H946"/>
+        <rect class="ok" x="950" y="60" width="150" height="80" rx="12"/><text class="t" x="966" y="88">Tool runs</text><text class="s" x="966" y="108">or is skipped, and the</text><text class="s" x="966" y="124">agent is told why</text>
+        <text class="el" x="560" y="192" text-anchor="middle">measured: 2.9 s from the /approve comment to the decision reaching the agent</text>
+      </svg>
+    </div>
+  </figure>
+  <div class="cards">
+    <div class="card"><h3>Nothing changes without a person</h3><ul><li>Changing tools are listed by name in each agent’s approval list. We never rely on a server’s “destructive” label alone.</li><li>Only team notifications are approved automatically.</li></ul></div>
+    <div class="card"><h3>Least access</h3><ul><li>The database tool accepts one <code>SELECT</code>, through a read-only role.</li><li>The GitHub token reaches only the team repo.</li><li>Agents never see secrets; the sandbox never holds any.</li></ul></div>
+    <div class="card"><h3>Limits and a record</h3><ul><li>Run limits per agent, 24 steps and a cost cap per incident, then escalate.</li><li>Every tool call is recorded in TrueForge sessions and on the dashboard timeline.</li></ul></div>
+  </div>
+</section>
+
+<!-- RUNS -->
+<section id="runs">
+  <span class="label">Where it runs</span>
+  <h2>A laptop, four cloud services</h2>
+  <figure>
+    <div class="fig w-1000">
+      <svg viewBox="0 0 1120 360" role="img" aria-label="Deployment: on the laptop, Docker runs the shop's 31 containers plus NightShift's ops MCP server, payment load balancer, Postgres and Redis. TrueForge and NightShift control run as processes on the laptop. TrueForge calls Amazon Bedrock for models and Daytona for the sandbox. Agents use GitHub and Jira in the cloud.">
+        <rect class="zone" x="20" y="20" width="700" height="320" rx="16"/>
+        <text class="cap" x="40" y="46">THE LAPTOP</text>
+        <rect class="soft" x="40" y="62" width="660" height="150" rx="12"/>
+        <text class="cap" x="56" y="86">DOCKER</text>
+        <rect class="box" x="56" y="100" width="250" height="96" rx="10"/><text class="t" x="72" y="126">Astronomy Shop</text><text class="s" x="72" y="146">31 containers, Grafana, Prometheus,</text><text class="s" x="72" y="162">Jaeger, OpenSearch, load generator</text><text class="s" x="72" y="180">localhost:8080</text>
+        <rect class="dat" x="322" y="100" width="170" height="44" rx="10"/><text class="t" x="336" y="127">nightshift-ops :8000</text>
+        <rect class="box" x="322" y="152" width="170" height="44" rx="10"/><text class="t" x="336" y="172">payment-lb</text><text class="s" x="336" y="188">canary traffic split</text>
+        <rect class="box" x="508" y="100" width="176" height="44" rx="10"/><text class="t" x="522" y="127">Postgres · Redis</text>
+        <rect class="box" x="508" y="152" width="176" height="44" rx="10"/><text class="s" x="522" y="172">incident state · queue</text><text class="s" x="522" y="188">ports 5433 · 6380</text>
+
+        <rect class="tf" x="40" y="236" width="300" height="84" rx="12"/><text class="t" x="56" y="264">TrueForge 0.2.1 · :8790</text><text class="s" x="56" y="284">runs every agent · npx, unmodified</text><text class="s" x="56" y="300">local database with models, connectors</text>
+        <rect class="box" x="360" y="236" width="340" height="84" rx="12"/><text class="t" x="376" y="264">NightShift control · :8090</text><text class="s" x="376" y="284">watcher · supervisor loop · Jira bridge</text><text class="s" x="376" y="300">operations-room dashboard</text>
+
+        <rect class="zone" x="760" y="20" width="340" height="320" rx="16"/>
+        <text class="cap" x="780" y="46">CLOUD</text>
+        <rect class="box" x="780" y="62" width="300" height="56" rx="10"/><text class="t" x="796" y="86">Amazon Bedrock</text><text class="s" x="796" y="104">MiniMax M2.5 · Kimi K3</text>
+        <rect class="box" x="780" y="130" width="300" height="56" rx="10"/><text class="t" x="796" y="154">Daytona</text><text class="s" x="796" y="172">sandboxes for the agents’ code</text>
+        <rect class="box" x="780" y="198" width="300" height="56" rx="10"/><text class="t" x="796" y="222">GitHub · aryan-2255/SRE_agent</text><text class="s" x="796" y="240">NightShift, the shop, the plan</text>
+        <rect class="hum" x="780" y="266" width="300" height="56" rx="10"/><text class="t" x="796" y="290">Jira · SRE project</text><text class="s" x="796" y="308">incident tickets and approvals</text>
+
+        <path class="ar" d="M340 270 H356"/>
+        <path class="ar" d="M340 256 C 560 256, 600 90, 776 90"/>
+        <path class="ar" d="M340 300 C 580 330, 640 158, 776 158"/>
+        <path class="ar" d="M700 270 C 740 270, 740 294, 776 294"/>
+      </svg>
+    </div>
+    <figcaption>Nothing is deployed to a server: the demo runs on one laptop, and the live shop can be shared on a public link through a Cloudflare tunnel that exposes only the shop pages. The canary was measured on this setup: with a 70/30 split, 14 of 20 checkouts went to the old version and 6 to the new one.</figcaption>
+  </figure>
+</section>
+
+<!-- ROOM -->
+<section id="room">
+  <span class="label">The operations room</span>
+  <h2>The dashboard judges watch</h2>
+  <div class="prose">
+    <p>The dashboard at <code>localhost:8090</code> is a live map, not a progress bar. The supervisor sits in the centre with the agents around it and the systems they reach on the outside. Each decision pulses from the supervisor to the agent it chose. Each tool call flashes a line to the system it touched. Questions and send-backs draw a line straight between two agents.</p>
+    <p>Around the map: every watched service with its live error rate and trend; the approval card with Approve and Deny; the agents’ conversation, quoting each decision and its reason; the exact log lines, traces and numbers the agents read; and a timeline of the whole incident with approval waits highlighted. Any past incident can be replayed at speed.</p>
+  </div>
+</section>
+
+<!-- RULES -->
+<section id="rules">
+  <span class="label">Hackathon rules</span>
+  <h2>The three requirements, and where to see them</h2>
+  <div class="cards">
+    <div class="card"><span class="label">Reaches a real system</span><h3>A live shop with real traffic</h3><p>Agents read the shop’s Prometheus, OpenSearch and Jaeger data and change it through <code>nightshift-ops</code>; they also use GitHub and Jira. See the evidence panel and TrueForge sessions.</p></div>
+    <div class="card"><span class="label">Runs code in a sandbox</span><h3>Proof before a fix</h3><p>Validation, coder and tester clone the repo into a Daytona sandbox and run tests they wrote. The sandbox setup is tested; the full code path is <span class="st built">built, not yet run live</span>.</p></div>
+    <div class="card"><span class="label">Stops before irreversible actions</span><h3>TrueForge pauses, a person decides</h3><p>Every changing tool waits for Approve on the dashboard or <code>/approve</code> on Jira. <span class="st live">verified live</span> on INC-001.</p></div>
+  </div>
+</section>
+
+<!-- STATUS -->
+<section id="status">
+  <span class="label">What’s done, what isn’t</span>
+  <h2>Honest status</h2>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Part</th><th>Status</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td class="nm">Watcher, dependency grouping, synthetic customer</td><td><span class="st live">verified live</span></td><td>INC-001 opened on payment, checkout listed as a symptom</td></tr>
+        <tr><td class="nm">nightshift-ops (19 tools)</td><td><span class="st live">verified live</span></td><td>every tool called against the running shop</td></tr>
+        <tr><td class="nm">Rollback and canary</td><td><span class="st live">verified live</span></td><td>rollback 10.8 s; canary split 14 / 6 at 70 / 30</td></tr>
+        <tr><td class="nm">Supervisor + guardrails</td><td><span class="st live">verified live</span></td><td>INC-001 resolved in 2:52 for $0.23</td></tr>
+        <tr><td class="nm">Jira approval bridge</td><td><span class="st live">verified live</span></td><td>ticket SRE-1, /approve picked up in 2.9 s</td></tr>
+        <tr><td class="nm">Daytona sandbox, GitHub connector</td><td><span class="st live">verified</span></td><td>Node 24 + npm ci on payment; agent read the repo’s commits</td></tr>
+        <tr><td class="nm">Operations-room dashboard</td><td><span class="st live">working</span></td><td>live stream and replay of INC-001</td></tr>
+        <tr><td class="nm">Code-fix path (validation → coder → tester → PR → review → canary)</td><td><span class="st built">built, not yet run live</span></td><td>agents, tools and demo bug are ready</td></tr>
+        <tr><td class="nm">ask / send_back between agents</td><td><span class="st built">built, not yet seen live</span></td><td>appear when an answer is weak or rejected</td></tr>
+        <tr><td class="nm">Docs research agent</td><td><span class="st built">built</span></td><td>needs a web-search connector</td></tr>
+        <tr><td class="nm">Toolsmith (agent writes a missing read-only tool)</td><td><span class="st plan">planned</span></td><td>—</td></tr>
+        <tr><td class="nm">Knowledge base of past incidents (vector search) and code graph</td><td><span class="st plan">planned</span></td><td>—</td></tr>
+        <tr><td class="nm">Retries inside tools; resuming after a restart; Slack</td><td><span class="st plan">planned</span></td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- START -->
+<section id="start">
+  <span class="label">Run it</span>
+  <h2>One repo, four commands</h2>
+  <div class="two">
+<pre>git clone https://github.com/aryan-2255/SRE_agent.git truforge_hackthon
+cd truforge_hackthon/nightshift
+./scripts/bootstrap.sh
+./scripts/start-trueforge.sh
+./.venv/bin/uvicorn control.app:app --port 8090
+
+<span class="c"># break something and watch</span>
+./.venv/bin/python scripts/mcp_call.py set_flag \
+  '{"flag":"paymentFailure","variant":"50%"}'</pre>
+    <ol class="steps">
+      <li><span class="n">01</span><span><code>bootstrap.sh</code> fills in paths, installs Python packages, and starts the shop and NightShift’s containers.</span></li>
+      <li><span class="n">02</span><span>TrueForge opens at <code>localhost:8790</code>. Models, sandbox, GitHub and Jira are set once in its Settings.</span></li>
+      <li><span class="n">03</span><span>The dashboard opens at <code>localhost:8090</code>. The watcher starts at once.</span></li>
+      <li><span class="n">04</span><span>Flip a failure switch and the incident appears within a minute. Approve on the dashboard or on Jira.</span></li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  <p>Architecture inspired by Bhavishya Pandit’s SRE-agent talk at a Google event, rebuilt on TrueForge.</p>
+  <p>Target system: OpenTelemetry Astronomy Shop (Apache-2.0). Agent harness: TrueForge by TrueFoundry (MIT), used unmodified. Built during Agents That Act, Bengaluru, 26 September 2026, with help from Claude Code.</p>
+</footer>
+</main>
+</div>
