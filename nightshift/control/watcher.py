@@ -67,6 +67,23 @@ async def _error_rates(client: httpx.AsyncClient, metric: str, window: str) -> d
     return out
 
 
+async def _op_error_rates(client: httpx.AsyncClient, metric: str, window: str) -> dict[tuple, dict]:
+    """The same per operation (endpoint): one broken endpoint can hide inside a busy service's average."""
+    kind = 'span_kind=~"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER"'
+    by = "service_name, span_name"
+    errs = await _query(client, f'sum by ({by}) (rate({metric}{{{kind},status_code="STATUS_CODE_ERROR"}}[{window}])) > 0')
+    if not errs:
+        return {}
+    total = await _query(client, f"sum by ({by}) (rate({metric}{{{kind}}}[{window}]))")
+    tot = {(r["metric"].get("service_name"), r["metric"].get("span_name")): float(r["value"][1]) for r in total}
+    out = {}
+    for r in errs:
+        key = (r["metric"].get("service_name"), r["metric"].get("span_name"))
+        if tot.get(key):
+            out[key] = {"rps": round(tot[key], 4), "error_pct": round(100 * float(r["value"][1]) / tot[key], 2)}
+    return out
+
+
 def _deps(system: dict, service: str) -> set[str]:
     """Every service this one calls, directly or indirectly."""
     seen, todo = set(), list(system["services"].get(service, {}).get("depends_on", []))
@@ -83,13 +100,15 @@ def _root_incident(system: dict, service: str) -> dict | None:
     deps = _deps(system, service)
     if not deps:
         return None
-    return db.one("select id, service from incidents where system=%s and service = any(%s) and status in ('open','mitigated') "
+    return db.one("select id, service, trigger from incidents where system=%s and service = any(%s) and status in ('open','mitigated') "
                   "and opened_at > now() - interval '30 minutes' order by opened_at desc limit 1", system["name"], list(deps))
 
 
 def open_incident(system: dict, service: str, reason: str, trigger: dict) -> str | None:
     root = _root_incident(system, service)
     if root:
+        if service in ((root.get("trigger") or {}).get("symptoms") or []):
+            return None  # already noted on that incident
         db.q("update incidents set trigger = coalesce(trigger,'{}'::jsonb) || jsonb_build_object('symptoms', "
              "coalesce(trigger->'symptoms','[]'::jsonb) || to_jsonb(%s::text)) where id=%s", service, root["id"])
         bus.publish("incident.symptom", f"{service} is failing too, most likely because it depends on {root['service']}",
@@ -189,6 +208,30 @@ async def run(system_name: str = "astronomy-shop") -> None:
                         failures = round(r["rps"] * r["error_pct"] / 100 * window_s, 1)
                         tiles[name] = {**r, "failed_requests": failures, "limit_pct": limit, "state": state,
                                        "over": state == "over", "over_for_s": held, "fires_after_s": need_s}
+                    # one endpoint failing inside an otherwise healthy service
+                    op_limit = watch.get("op_error_pct", 20)
+                    try:
+                        op_rates = await _op_error_rates(client, metric, window)
+                    except Exception as e:  # noqa: BLE001
+                        op_rates = {}
+                        log.warning("per-operation rates failed: %s", e)
+                    seen_ops = set()
+                    for (svc, op), r in op_rates.items():
+                        if svc not in tiles:
+                            continue
+                        key = f"op:{svc}:{op}"
+                        seen_ops.add(key)
+                        limit = watched[svc]["slo"].get("max_op_error_pct", op_limit)
+                        state = classify(r, limit, window_s, min_failures)
+                        held = tick_timer(since, key, state, now, dt)
+                        if state == "over" and not tiles[svc]["over"]:
+                            t = tiles[svc]
+                            t.update(over=True, state="over", over_for_s=max(t["over_for_s"], held),
+                                     op={"name": op, "error_pct": r["error_pct"], "limit_pct": limit,
+                                         "failed_requests": round(r["rps"] * r["error_pct"] / 100 * window_s, 1)})
+                    for key in [k for k in since if k.startswith("op:") and k not in seen_ops]:
+                        since.pop(key, None)  # that operation has no errors any more
+
                     for name, t in tiles.items():
                         if not (t["over"] and t["over_for_s"] >= need_s):
                             continue
@@ -200,13 +243,18 @@ async def run(system_name: str = "astronomy-shop") -> None:
                             where = origin if origin and origin != name else None
                         target = where or name
                         tr = tiles.get(target, t)
-                        reason = (f"{target} errors at {tr['error_pct']}% ({tr['failed_requests']} failed requests in {window})"
-                                  + (f", also breaking {name}" if target != name else ""))
+                        if tr.get("op"):
+                            op = tr["op"]
+                            reason = (f"{target}: {op['name']} fails {op['error_pct']}% ({op['failed_requests']} failed requests in "
+                                      f"{window}) while {target} overall is at {tr['error_pct']}%")
+                        else:
+                            reason = f"{target} errors at {tr['error_pct']}% ({tr['failed_requests']} failed requests in {window})"
+                        reason += f", also breaking {name}" if target != name else ""
                         inc = open_incident(system, target, reason,
                                             {"type": "error_rate", "service": target, "symptom_of": name if target != name else None, **tr})
                         if inc:
-                            since.pop(name, None)
-                            since.pop(target, None)
+                            for k in [k for k in since if k in (name, target) or k.startswith(f"op:{name}:") or k.startswith(f"op:{target}:")]:
+                                since.pop(k, None)
                     latest["services"] = tiles
 
                     # signals that error rates miss (queue lag, stalled consumers)

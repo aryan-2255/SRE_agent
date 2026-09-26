@@ -1,627 +1,521 @@
-// NightShift operations room: a live network of agents driven by /api/stream (server-sent events).
-"use strict";
+// NightShift board. Every event (live from /api/stream, or stored for a past incident) goes through one reducer,
+// apply(), into per-agent state; the strips, the detail pane and the timeline are drawn from that state.
 
-const SVGNS = "http://www.w3.org/2000/svg";
-const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour12: false });
-const USD_INR = 88;
-
-// ---------------- the map ----------------
-const HUB = { x: 600, y: 400 };
-const RING = 262;
 const AGENTS = [
-  ["triage", "Triage", "MiniMax"], ["diagnosis", "Diagnosis", "Kimi"], ["validation", "Validation", "Kimi"],
-  ["plan", "Planner", "Kimi"], ["mitigation", "Mitigation", "MiniMax"], ["verify", "Verify", "MiniMax"],
-  ["fix", "Coder", "Kimi"], ["test", "Tester", "MiniMax"], ["pr", "Pull request", "MiniMax"],
-  ["review", "Reviewer", "Kimi"], ["cicd", "CI/CD · canary", "MiniMax"], ["postmortem", "Postmortem", "MiniMax"],
-  ["docs", "Docs research", "Kimi"],
+  { stage: "triage", name: "Triage", role: "Is it real? How bad?", bay: "understand" },
+  { stage: "diagnosis", name: "Diagnosis", role: "Finds the root cause", bay: "understand" },
+  { stage: "validation", name: "Validator", role: "Reproduces it in a sandbox", bay: "understand" },
+  { stage: "plan", name: "Planner", role: "Options, risk, evidence", bay: "contain" },
+  { stage: "mitigation", name: "Mitigator", role: "Makes one approved change", bay: "contain" },
+  { stage: "verify", name: "Verifier", role: "Checks it worked", bay: "contain" },
+  { stage: "fix", name: "Coder", role: "Writes the permanent fix", bay: "fix" },
+  { stage: "test", name: "Tester", role: "Runs it in a clean sandbox", bay: "fix" },
+  { stage: "pr", name: "Pull request", role: "Branch, commit, PR", bay: "fix" },
+  { stage: "review", name: "Reviewer", role: "Reads the diff", bay: "fix" },
+  { stage: "cicd", name: "Release", role: "Merge, canary, promote", bay: "fix" },
+  { stage: "postmortem", name: "Postmortem", role: "Writes down what happened", bay: "learn" },
+  { stage: "docs", name: "Docs researcher", role: "Provider documentation", bay: "learn" },
 ];
-const POS = {};
-AGENTS.forEach(([id], i) => {
-  const a = (Math.PI / 180) * (180 + (i * 360) / AGENTS.length);
-  POS[id] = { x: HUB.x + RING * Math.cos(a), y: HUB.y + RING * Math.sin(a) };
-});
-POS.supervisor = HUB;
-const SYSTEMS = {
-  watcher: { x: 30, y: 118, w: 186, label: "Watcher", sub: "always on · no AI · ₹0", cls: "watcher" },
-  shop: { x: 30, y: 372, w: 186, label: "Live system", sub: "logs · metrics · traces · docker" },
-  human: { x: 507, y: 22, w: 186, label: "On-call · Jira", sub: "approves every change", cls: "human" },
-  github: { x: 994, y: 238, w: 186, label: "GitHub", sub: "commits · branches · PRs" },
-  sandbox: { x: 994, y: 506, w: 186, label: "Daytona sandbox", sub: "runs the agents' code" },
-  harness: { x: 994, y: 724, w: 186, label: "TrueForge harness", sub: "sub-agents · tool search" },
-};
-for (const s of Object.values(SYSTEMS)) { s.h = 58; s.cx = s.x + s.w / 2; s.cy = s.y + s.h / 2; }
+const BAYS = [
+  ["understand", "Understand", "what broke and why"],
+  ["contain", "Stop the damage", "every change waits for you"],
+  ["fix", "Fix for good", "sandbox, then a pull request"],
+  ["learn", "Learn", "so next time is faster"],
+];
+const NAME = Object.fromEntries(AGENTS.map((a) => [a.stage, a.name]));
+NAME.supervisor = "Supervisor";
+const STATUS_WORD = { idle: "Not started", running: "Working", waiting: "Waiting for you", done: "Done", failed: "Failed",
+  skipped: "Not needed", interrupted: "Interrupted" };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const inr = (usd) => "₹" + (usd * 88).toFixed(usd * 88 < 10 ? 2 : 0);
+const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const dur = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`; };
+const parse = (x) => { if (typeof x !== "string") return x; try { return JSON.parse(x); } catch { return x; } };
+const short = (s, n = 140) => { s = typeof s === "string" ? s : JSON.stringify(s); return s && s.length > n ? s.slice(0, n) + "…" : s || ""; };
 
-const OPS_TOOLS = new Set(["list_services", "get_error_rates", "get_metrics", "query_logs", "get_traces", "get_trace",
-  "get_recent_deploys", "get_flags", "run_sql_readonly", "synthetic_check", "rollback", "deploy", "deploy_canary",
-  "promote_canary", "abort_canary", "restart_service", "scale_service", "set_flag"]);
-function systemFor(tool) {
-  const t = String(tool || "");
-  if (OPS_TOOLS.has(t)) return "shop";
-  if (t === "notify" || /jira|confluence|atlassian/i.test(t)) return "human";
-  if (/pull_request|commit|branch|file_contents|push_files|repository|search_code|merge|issue|release|tag/.test(t)) return "github";
-  if (/sandbox|exec|shell|bash|command|write_file|read_file|run_code|python|terminal/i.test(t)) return "sandbox";
-  return "harness";
-}
+let S;
+const view = { follow: true, selected: null, mode: "live", team: {}, me: null, watch: null, replayTimers: [] };
 
-// ---------------- state ----------------
-let S = freshState();
-function freshState() {
-  return { id: null, inc: null, events: [], runs: {}, status: {}, tools: {}, toolTotal: 0, t0: null, tEnd: null, lastTs: null, sats: {}, pending: [] };
+function fresh(id) {
+  S = { id, inc: null, start: null, end: null, cost: 0, stages: {}, decisions: [], approvals: {}, feed: [], jira: null, sup: { runs: 0, ai: 0 } };
+  for (const a of AGENTS) S.stages[a.stage] = { status: "idle", steps: [], runs: [], output: null, cost: 0, last: "", session: null, attempts: 0 };
 }
-let mode = "idle";          // idle | live | replay
-let replayTimer = null;
-const history = {};         // service -> recent error %
+fresh(null);
 
-// ---------------- svg helpers ----------------
-const net = $("#net");
-function el(tag, attrs = {}, parent = net) {
-  const e = document.createElementNS(SVGNS, tag);
-  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
-  parent.appendChild(e);
-  return e;
-}
-function edgePoint(from, to, r) {
-  const dx = to.x - from.x, dy = to.y - from.y, d = Math.hypot(dx, dy) || 1;
-  return { x: from.x + (dx / d) * r, y: from.y + (dy / d) * r };
-}
-function curve(a, b, bend = 0.18) {
-  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-  const nx = -(b.y - a.y) * bend, ny = (b.x - a.x) * bend;
-  return `M${a.x},${a.y} Q${mx + nx},${my + ny} ${b.x},${b.y}`;
-}
-function nodePoint(id) {
-  if (SYSTEMS[id]) return { x: SYSTEMS[id].cx, y: SYSTEMS[id].cy };
-  return POS[id] || HUB;
-}
+// ---------------- reducer ----------------
+function st(stage) { return S.stages[stage]; }
+function step(stage, item) { const s = st(stage); if (s) { s.steps.push(item); s.last = item.line || s.last; } }
+function openRun(s, t) { s.runs.push({ start: t, end: null, status: "running" }); }
+function closeRun(s, t, status) { const r = s.runs[s.runs.length - 1]; if (r && !r.end) { r.end = t; r.status = status; } }
 
-let layerEdges, layerFx, layerNodes;
-function drawMap() {
-  net.innerHTML = "";
-  layerEdges = el("g"); layerFx = el("g"); layerNodes = el("g");
-  el("circle", { cx: HUB.x, cy: HUB.y, r: RING, class: "ring-guide" }, layerEdges);
-  for (const [id] of AGENTS) {
-    const a = edgePoint(HUB, POS[id], 56), b = edgePoint(POS[id], HUB, 40);
-    el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: "spoke", id: `spoke-${id}` }, layerEdges);
-  }
-  for (const [key, s] of Object.entries(SYSTEMS)) {
-    const g = el("g", { class: `sys-node ${s.cls || ""}`, id: `sys-${key}` }, layerNodes);
-    el("rect", { x: s.x, y: s.y, width: s.w, height: s.h, rx: 10 }, g);
-    el("text", { x: s.x + 14, y: s.y + 25, class: "label" }, g).textContent = s.label;
-    el("text", { x: s.x + 14, y: s.y + 44, class: "sub" }, g).textContent = s.sub;
-  }
-  const hub = el("g", { class: "node hub", id: "node-supervisor" }, layerNodes);
-  el("circle", { cx: HUB.x, cy: HUB.y, r: 54, class: "halo" }, hub);
-  el("circle", { cx: HUB.x, cy: HUB.y, r: 54, class: "body" }, hub);
-  el("text", { x: HUB.x, y: HUB.y - 1, class: "label" }, hub).textContent = "Supervisor";
-  el("text", { x: HUB.x, y: HUB.y + 18, class: "sub" }, hub).textContent = "Kimi K3";
-  for (const [id, label, model] of AGENTS) {
-    const p = POS[id];
-    const g = el("g", { class: "node", id: `node-${id}` }, layerNodes);
-    el("circle", { cx: p.x, cy: p.y, r: 37, class: "body" }, g);
-    el("circle", { cx: p.x, cy: p.y, r: 43, class: "spin" }, g);
-    el("text", { x: p.x, y: p.y + 5, class: "glyph", id: `glyph-${id}` }, g).textContent = "idle";
-    el("text", { x: p.x, y: p.y + 58, class: "label" }, g).textContent = label;
-    el("text", { x: p.x, y: p.y + 74, class: "sub" }, g).textContent = model;
-    const badge = el("g", { id: `badge-${id}`, visibility: "hidden" }, g);
-    el("circle", { cx: p.x + 29, cy: p.y - 29, r: 11, class: "count-bg" }, badge);
-    el("text", { x: p.x + 29, y: p.y - 25, class: "count", id: `count-${id}` }, badge).textContent = "1";
-  }
-}
-
-const GLYPH = { running: "working", waiting: "needs you", done: "done", failed: "failed", skipped: "skipped" };
-function setNode(id, state) {
-  S.status[id] = state;
-  const g = document.getElementById(`node-${id}`);
-  if (!g) return;
-  g.classList.remove("running", "waiting", "done", "failed", "skipped");
-  if (state) g.classList.add(state);
-  const gl = document.getElementById(`glyph-${id}`);
-  if (gl) gl.textContent = GLYPH[state] || "idle";
-  const sp = document.getElementById(`spoke-${id}`);
-  if (sp) sp.classList.toggle("hot", state === "running" || state === "waiting");
-}
-function setRuns(id) {
-  const n = S.runs[id] || 0, b = document.getElementById(`badge-${id}`);
-  if (!b) return;
-  b.setAttribute("visibility", n > 1 ? "visible" : "hidden");
-  document.getElementById(`count-${id}`).textContent = n;
-}
-function hubThinking(on) { document.getElementById("node-supervisor")?.classList.toggle("thinking", on); }
-function sysHot(key, ms = 900) {
-  const g = document.getElementById(`sys-${key}`);
-  if (!g) return;
-  g.classList.add("hot");
-  clearTimeout(g._t);
-  g._t = setTimeout(() => g.classList.remove("hot"), ms);
-}
-
-// ---------------- motion ----------------
-const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-function pulse(from, to, cls = "", dur = 650, bend = 0) {
-  if (!layerFx || reduceMotion) return;
-  const a = nodePoint(from), b = nodePoint(to);
-  const path = el("path", { d: curve(a, b, bend), fill: "none", stroke: "none" }, layerFx);
-  const dot = el("circle", { r: 5, class: `pulse ${cls}` }, layerFx);
-  const len = path.getTotalLength();
-  const start = performance.now();
-  (function step(now) {
-    const t = Math.min(1, (now - start) / dur), p = path.getPointAtLength(len * (1 - Math.pow(1 - t, 2)));
-    dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y);
-    if (t < 1) requestAnimationFrame(step); else { dot.remove(); path.remove(); }
-  })(start);
-}
-function flash(from, to, cls = "flash", ms = 1100) {
-  if (!layerFx) return;
-  const a = nodePoint(from), b = nodePoint(to);
-  const p = el("path", { d: curve(a, b, 0.12), class: cls }, layerFx);
-  p.style.transition = `opacity ${ms}ms ease-in`;
-  requestAnimationFrame(() => requestAnimationFrame(() => { p.style.opacity = "0"; }));
-  setTimeout(() => p.remove(), ms + 80);
-}
-function talkLine(from, to, text) {
-  if (!layerFx || !POS[from] || !POS[to]) return;
-  const a = POS[from], b = POS[to], bend = 0.35;
-  const g = el("g", {}, layerFx);
-  el("path", { d: curve(a, b, bend), class: "talkline" }, g);
-  const qx = (a.x + b.x) / 2 - (b.y - a.y) * bend, qy = (a.y + b.y) / 2 + (b.x - a.x) * bend;
-  const mx = (a.x + 2 * qx + b.x) / 4, my = (a.y + 2 * qy + b.y) / 4;   // midpoint of the curve
-  const label = el("g", { class: "talklabel" }, g);
-  const short = text.length > 34 ? text.slice(0, 33) + "…" : text;
-  const w = Math.max(60, short.length * 8 + 16);
-  el("rect", { x: mx - w / 2, y: my - 11, width: w, height: 22, rx: 6 }, label);
-  el("text", { x: mx, y: my + 4, "text-anchor": "middle" }, label).textContent = short;
-  g.style.transition = "opacity 1.2s";
-  setTimeout(() => { g.style.opacity = ".25"; }, 6000);
-  pulse(from, to, "talk", 900, bend);
-}
-function satellite(stage, title) {
-  const p = POS[stage];
-  if (!p || !layerFx) return;
-  const list = (S.sats[stage] ||= []);
-  const i = list.length;
-  list.push(title);
-  const a = -Math.PI / 2 + i * 0.75, r = 56;
-  const g = el("g", { class: "sat" }, layerFx);
-  el("circle", { cx: p.x + r * Math.cos(a), cy: p.y + r * Math.sin(a), r: 5 }, g);
-  el("text", { x: p.x + (r + 10) * Math.cos(a), y: p.y + (r + 10) * Math.sin(a) + 3,
-    "text-anchor": Math.cos(a) < 0 ? "end" : "start" }, g).textContent = title;
-}
-
-// ---------------- panels ----------------
-function setNow(html) { $("#now").innerHTML = html; }
-function say(cls, who, msg, ts, extra = "") {
-  const ol = $("#talk");
-  ol.querySelector(".empty")?.remove();
-  const li = document.createElement("li");
-  li.className = cls;
-  li.innerHTML = `<div class="meta"><span class="who">${esc(who)}</span><span>${clock(ts)}</span></div><div class="msg">${esc(msg)}${extra}</div>`;
-  ol.prepend(li);
-  while (ol.children.length > 80) ol.lastChild.remove();
-}
-function setCost(usd) { $("#cost").textContent = "₹" + (usd * USD_INR).toFixed(2); }
-function renderTitle() {
-  const i = S.inc;
-  if (!i) { $("#inc-title").innerHTML = `<span class="muted">No active incident</span>`; return; }
-  $("#inc-title").innerHTML = `<span class="id">${esc(i.id)}</span>
-    <span class="pill ${esc(i.status)}">${esc((i.status || "").replace("_", " "))}</span>
-    ${i.severity ? `<span class="pill sev">${esc(i.severity)}</span>` : ""}
-    <span class="t">${esc(i.summary || i.service)}</span>
-    ${i.jira_url ? `<a class="small" href="${esc(i.jira_url)}" target="_blank" rel="noopener">${esc(i.jira_key)}</a>` : ""}
-    ${i.pr_url ? `<a class="small" href="${esc(i.pr_url)}" target="_blank" rel="noopener">pull request</a>` : ""}`;
-}
-function tickElapsed() {
-  if (!S.t0) { $("#elapsed").textContent = "—"; return; }
-  const end = S.tEnd || (mode === "live" ? Date.now() : S.lastTs || S.t0);
-  const s = Math.max(0, Math.round((end - S.t0) / 1000));
-  $("#elapsed").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-setInterval(tickElapsed, 1000);
-
-function renderTraffic() {
-  const entries = Object.entries(S.tools).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  const max = Math.max(1, ...entries.map(([, n]) => n));
-  $("#tool-total").textContent = `${S.toolTotal} calls`;
-  $("#traffic").innerHTML = entries.map(([t, n]) => `<li><span>${esc(t)}</span><span>${n}</span>
-    <span class="bar2"><i style="width:${(n / max) * 100}%"></i></span></li>`).join("") || `<li class="empty">No tool calls yet.</li>`;
-}
-
-function renderWatch(w) {
-  if (!w || !w.services) return;
-  const rows = Object.entries(w.services);
-  $("#svc").innerHTML = rows.map(([name, s]) => {
-    const h = (history[name] ||= []);
-    h.push(s.error_pct); if (h.length > 60) h.shift();
-    const top = Math.max(s.limit_pct * 2, ...h, 1);
-    const pts = h.map((v, i) => `${(i / 59) * 100},${22 - (v / top) * 20}`).join(" ");
-    const lim = 22 - (s.limit_pct / top) * 20;
-    const state = s.over ? `over limit for ${s.over_for_s}s · fires at ${s.fires_after_s}s` : `${s.rps.toFixed(2)} req/s · limit ${s.limit_pct}%`;
-    return `<li class="${s.over ? "over" : ""}"><span class="n">${esc(name)}</span><span class="e">${s.error_pct.toFixed(1)}%</span>
-      <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">
-        <line x1="0" x2="100" y1="${lim}" y2="${lim}" stroke="#FF6B5E" stroke-opacity=".35" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>
-        <polyline points="${pts}" fill="none" stroke="${s.over ? "#FF6B5E" : "#3FD69B"}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>
-      <span class="s">${esc(state)}</span></li>`;
-  }).join("");
-  const syn = w.synthetic;
-  if (syn) {
-    $("#synth").innerHTML = (syn.steps || []).map((s) => `<span class="${s.ok ? "ok" : "bad"}">${s.ok ? "✓" : "✗"} ${esc(s.step)}</span>`).join("")
-      || `<span class="${syn.passed ? "ok" : "bad"}">${syn.passed ? "passing" : "failing"}</span>`;
-  }
-  const anyOver = rows.some(([, s]) => s.over);
-  $("#watch-state").textContent = anyOver ? "breach" : "rules · no AI";
-  $("#watch-state").className = "tag " + (anyOver ? "" : "ok");
-  document.getElementById("sys-watcher")?.classList.toggle("hot", anyOver);
-}
-
-const UNDO = {
-  rollback: "Undo: deploy again, or roll back to another commit.", deploy: "Undo: rollback returns to the previous image in seconds.",
-  deploy_canary: "Undo: abort_canary sends all traffic back.", promote_canary: "Undo: rollback.", set_flag: "Undo: set the flag back.",
-  restart_service: "A restart changes no code or data.", scale_service: "Undo: scale back to 1.",
-  create_pull_request: "Undo: close the pull request.", merge_pull_request: "Undo: revert the merge, then roll back.",
-};
-function renderApproval() {
-  const a = S.pending[0];
-  const box = $("#approval");
-  if (!a) { box.innerHTML = ""; return; }
-  const args = typeof a.args === "string" ? a.args : JSON.stringify(a.args, null, 2);
-  const live = mode === "live";
-  box.innerHTML = `<div class="approval">
-    <div class="h">Paused by TrueForge · ${esc(a.stage)} wants to change production</div>
-    <div class="q">Allow <code>${esc(a.tool)}</code>?</div>
-    <pre>${esc(args)}</pre>
-    <div class="undo">${esc(UNDO[a.tool] || "")}${S.inc?.jira_url ? ` Or reply <code>/approve</code> on <a href="${esc(S.inc.jira_url)}" target="_blank" rel="noopener">${esc(S.inc.jira_key)}</a>.` : ""}</div>
-    <div class="row"><button class="btn yes" id="ap-yes" ${live ? "" : "disabled"}>Approve</button>
-      <button class="btn no" id="ap-no" ${live ? "" : "disabled"}>Deny</button>
-      <input id="ap-reason" placeholder="reason (for deny)" ${live ? "" : "disabled"}></div></div>`;
-  if (live) {
-    $("#ap-yes").onclick = () => decide(a.id, "approve");
-    $("#ap-no").onclick = () => decide(a.id, "deny", $("#ap-reason").value || "Denied from the dashboard");
-  }
-}
-async function decide(id, decision, reason = "") {
-  document.querySelectorAll(".approval .btn").forEach((b) => (b.disabled = true));
-  await fetch(`/api/approvals/${id}`, { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ decision, reason, by: "dashboard" }) });
-}
-
-// ---------------- evidence ----------------
-function traceLink(id, link) {
-  return id ? ` <a href="${esc(link || "http://localhost:8080/jaeger/ui/trace/" + id)}" target="_blank" rel="noopener">trace ↗</a>` : "";
-}
-function renderItems(d) {
-  const it = d.items;
-  if (!it || typeof it === "string") return `<pre>${esc(String(it ?? "").slice(0, 1400))}</pre>`;
-  if (it.error) return `<div class="line err">${esc(it.error)}</div>`;
-  switch (d.tool) {
-    case "query_logs":
-      return `<div class="ev-h"><span>${esc(it.service)} · ${it.count} lines</span><span>${esc(JSON.stringify(it.by_level || {}))}</span></div>` +
-        (it.lines || []).slice(0, 7).map((l) => `<div class="line ${/error|fatal/i.test(l.level || "") ? "err" : ""}">${esc((l.time || "").slice(11, 19))} ${esc(l.level || "")} · ${esc(l.message)}${traceLink(l.trace_id)}</div>`).join("");
-    case "get_traces":
-      return (Array.isArray(it) ? it : []).slice(0, 4).map((t) => `<div class="line ${t.failing_step ? "err" : ""}">${esc(t.root)} · ${t.duration_ms} ms · ${t.steps} steps${t.real_user ? " · real user" : ""}${t.failing_step ? `<br>✗ ${esc(t.failing_step.service)} ${esc(t.failing_step.operation)}: ${esc(t.failing_step.message || "")}` : ""}${traceLink(t.trace_id, t.link)}</div>`).join("") || `<div class="line">no matching traces</div>`;
-    case "get_trace": {
-      const bad = (it.steps || []).filter((s) => s.error);
-      return (bad.length ? bad : it.steps || []).slice(0, 6).map((s) => `<div class="line ${s.error ? "err" : ""}">${s.at_ms} ms · ${esc(s.service)} ${esc(s.operation)}${s.message ? ": " + esc(s.message) : ""}</div>`).join("") + traceLink(it.trace_id, it.link);
-    }
-    case "get_error_rates":
-      return `<table>${Object.entries(it).filter(([, v]) => v && typeof v === "object").map(([k, v]) =>
-        `<tr><td>${esc(k)}</td><td class="${v.over_threshold ? "bad" : ""}">${v.error_pct}%</td><td>${v.rps}/s</td><td>p95 ${v.p95_ms ?? "–"}</td></tr>`).join("")}</table>`;
-    case "get_recent_deploys":
-      return [...(it.deploys || []).slice(-3).map((x) => `<div class="line">${esc(x.action)} · ${esc(x.service)} → ${esc(x.commit)}</div>`),
-        ...(it.recent_commits || []).slice(0, 4).map((c) => `<div class="line">${esc(c.commit)} · ${esc(c.author)} · ${esc(c.message)}</div>`)].join("") || `<div class="line">no recent deploys</div>`;
-    case "synthetic_check":
-      return (it.steps || []).map((s) => `<div class="line ${s.ok ? "" : "err"}">${s.ok ? "✓" : "✗"} ${esc(s.step)} ${s.status ? "· " + s.status : ""} ${esc(s.detail || "")}</div>`).join("");
-    default:
-      return `<pre>${esc(JSON.stringify(it, null, 1).slice(0, 1400))}</pre>`;
-  }
-}
-function addEvidence(e) {
-  const d = e.data || {};
-  const box = $("#evidence");
-  box.querySelector(".empty")?.remove();
-  const div = document.createElement("div");
-  div.className = "ev";
-  div.innerHTML = `<div class="ev-h"><span><span class="src ${esc(d.source)}">${esc(d.source)}</span> ${esc(d.tool)}</span><span>${esc(e.stage || "")} · ${clock(e.ts)}</span></div>${renderItems(d)}`;
-  box.prepend(div);
-  while (box.children.length > 30) box.lastChild.remove();
-}
-
-// ---------------- timeline ----------------
-const TL_CLASS = { "stage.started": "stage", "stage.done": "stage", "supervisor.decision": "sup", "tool.call": "tool",
-  "approval.requested": "hum", "approval.decided": "hum", "agent.question": "hum", "agent.sendback": "hum",
-  "stage.failed": "bad", "incident.escalated": "bad", "supervisor.overruled": "bad", "incident.opened": "bad",
-  "incident.resolved": "stage", "incident.mitigated": "stage" };
-function renderTimeline() {
-  const tl = $("#tl");
-  if (!S.t0) { tl.innerHTML = ""; $("#tl-range").textContent = ""; return; }
-  const end = Math.max(S.lastTs || S.t0, mode === "live" && !S.tEnd ? Date.now() : 0, S.t0 + 1000);
-  const span = end - S.t0;
-  const x = (ts) => Math.max(0, Math.min(100, ((ts - S.t0) / span) * 100));
-  let html = "";
-  let waitStart = null;
-  for (const e of S.events) {
-    const t = Date.parse(e.ts);
-    if (e.kind === "approval.requested") waitStart = t;
-    if (e.kind === "approval.decided" && waitStart) { html += `<div class="band" style="left:${x(waitStart)}%;width:${x(t) - x(waitStart)}%"></div>`; waitStart = null; }
-    const c = TL_CLASS[e.kind];
-    if (c) html += `<div class="tick ${c}" style="left:${x(t)}%" title="${esc(e.kind)} ${esc(e.text || "")}"></div>`;
-    if (e.kind === "stage.started") html += `<div class="lbl" style="left:${Math.max(2.5, Math.min(97.5, x(t)))}%">${esc(e.stage)}</div>`;
-  }
-  tl.innerHTML = html;
-  $("#tl-range").textContent = `${clock(S.t0)} → ${clock(end)}`;
-}
-
-// ---------------- apply one event ----------------
-const SAY_AGENT = { triage: "triage", diagnosis: "diagnosis", validation: "validation", plan: "planner", mitigation: "mitigation",
-  verify: "verify", fix: "coder", test: "tester", pr: "pull request", review: "reviewer", cicd: "ci/cd", postmortem: "postmortem", docs: "docs" };
-const who = (st) => SAY_AGENT[st] || st || "system";
-
-function apply(e, animate) {
-  const ts = e.ts || new Date().toISOString();
-  if (e.kind === "watcher.tick") { if (mode !== "replay") renderWatch(e.data); return; }
-  S.events.push(e);
-  S.lastTs = Date.parse(ts);
-  const st = e.stage, d = e.data || {};
-  switch (e.kind) {
+function apply(ev) {
+  const t = ev.ts, d = ev.data || {}, stage = ev.stage, s = stage && S.stages[stage];
+  if (ev.incident_id && S.id && ev.incident_id !== S.id) return;
+  if (t && !S.start && ev.incident_id) S.start = t;
+  switch (ev.kind) {
     case "incident.opened":
-      S.t0 = Date.parse(ts);
-      if (animate) { sysHot("watcher", 2000); pulse("watcher", "triage", "", 900); }
-      say("bad", "watcher", e.text, ts);
-      setNow(`<span class="who">alert</span> ${esc(e.text)}`);
+      S.feed.push({ t, kind: "open", text: ev.text });
       break;
     case "stage.started":
-      S.runs[st] = (S.runs[st] || 0) + 1; setRuns(st);
-      setNode(st, "running");
-      if (animate) pulse(st === "triage" ? "watcher" : "supervisor", st, "", 700);
-      setNow(`<span class="who">${esc(who(st))}</span> started${S.runs[st] > 1 ? ` (run ${S.runs[st]})` : ""}`);
+      if (s) { s.status = "running"; s.attempts = d.attempt || s.attempts + 1; openRun(s, t);
+        step(stage, { t, kind: "mark", what: d.attempt > 1 ? `Started again (attempt ${d.attempt})` : "Started", line: "Starting" }); }
       break;
     case "stage.session":
-      if (st === "supervisor") hubThinking(true);
+      if (stage === "supervisor") S.sup.runs++;
+      else if (s) s.session = d.url;
+      break;
+    case "sandbox":
+      step(stage, { t, kind: "mark", what: "Sandbox started (Daytona): isolated, no secrets, no access to the live shop", line: "Sandbox started" });
+      break;
+    case "subagent":
+      step(stage, { t, kind: "mark", what: ev.text, line: ev.text });
+      break;
+    case "tool.call": {
+      const args = parse(d.args) || {};
+      const isExec = d.tool === "exec";
+      const what = isExec ? (args.intent || "Ran a command in the sandbox") : d.tool;
+      const line = isExec ? `Sandbox: ${args.intent || "command"}` : `${d.tool} ${short(argText(args), 90)}`;
+      step(stage, { t, kind: "call", tool: d.tool, what, args, line });
+      break;
+    }
+    case "tool.result": {
+      const list = (st(stage) || { steps: [] }).steps;
+      for (let i = list.length - 1; i >= 0; i--) if (list[i].kind === "call" && list[i].tool === d.tool && list[i].result == null) { list[i].result = d.result; break; }
+      break;
+    }
+    case "evidence.unverified":
+      step(stage, { t, kind: "bad", what: ev.text, line: ev.text });
+      break;
+    case "stage.waiting":
+      step(stage, { t, kind: "mark", what: ev.text, line: ev.text });
+      break;
+    case "stage.retry":
+      step(stage, { t, kind: "bad", what: ev.text, line: "Retrying after an error" });
+      break;
+    case "stage.done":
+      if (s) { s.status = "done"; s.output = d.output || {}; s.cost += d.cost_usd || 0; closeRun(s, t, "done");
+        step(stage, { t, kind: "good", what: "Answered", line: ev.text }); s.last = ev.text; }
+      break;
+    case "stage.failed":
+      if (s) { s.status = "failed"; closeRun(s, t, "failed"); step(stage, { t, kind: "bad", what: ev.text, line: ev.text }); }
+      break;
+    case "stage.skipped":
+      if (s && s.status === "idle") s.status = "skipped";
       break;
     case "supervisor.decision": {
-      hubThinking(false);
       const dec = d.decision || {};
-      if (animate && dec.stage && POS[dec.stage]) pulse("supervisor", dec.stage, "", 650);
-      say("sup", "supervisor", e.text, ts);
-      setNow(`<span class="who">supervisor</span> ${esc(e.text)}`);
+      if (d.by === "supervisor") S.sup.ai++;
+      S.decisions.push({ t, text: ev.text, by: d.by || "supervisor", because: d.asked_because, url: d.url, dec });
+      S.feed.push({ t, kind: "decision", by: d.by === "rules" ? "Rules" : "Supervisor", text: ev.text, because: d.asked_because, url: d.url });
       break;
     }
     case "supervisor.overruled":
-      hubThinking(false);
-      say("bad", "guardrail", e.text, ts);
+      S.feed.push({ t, kind: "overruled", by: "Guardrail", text: ev.text });
       break;
-    case "tool.call": {
-      const sys = systemFor(d.tool);
-      S.tools[d.tool] = (S.tools[d.tool] || 0) + 1; S.toolTotal++;
-      renderTraffic();
-      if (animate && POS[st]) { flash(st, sys); pulse(st, sys, "tool", 600, 0.12); sysHot(sys); }
-      setNow(`<span class="who">${esc(who(st))}</span> called <b>${esc(d.tool)}</b> <span class="muted">on ${esc(SYSTEMS[sys].label)}</span>`);
-      break;
-    }
-    case "subagent":
-      satellite(st, d.title || "sub-agent");
-      say("agent", who(st), `started a parallel sub-agent: ${d.title || ""}`, ts);
-      if (animate) pulse(st, "harness", "tool", 700, 0.1);
-      break;
-    case "sandbox":
-      if (animate && POS[st]) { flash(st, "sandbox"); sysHot("sandbox", 1500); }
-      say("sys", "sandbox", `${who(st)} started a Daytona sandbox`, ts);
-      break;
-    case "stage.done":
-      setNode(st, "done");
-      say("agent", who(st), e.text, ts);
-      if (animate && POS[st]) pulse(st, "supervisor", "", 650);
-      break;
-    case "stage.failed":
-      setNode(st, "failed");
-      say("bad", who(st), e.text, ts);
-      break;
-    case "stage.retry":
-      say("bad", who(st), e.text, ts);
-      break;
-    case "stage.skipped":
-      if (!S.status[st]) setNode(st, "skipped");
+    case "agent.question": case "agent.sendback": case "agent.answer":
+      step(stage, { t, kind: "talk", what: ev.text, line: ev.text });
+      S.feed.push({ t, kind: "talk", by: ev.kind === "agent.answer" ? NAME[stage] : "Supervisor", text: ev.text });
       break;
     case "approval.requested":
-      setNode(st, "waiting");
-      S.pending.push({ id: d.approval_id, stage: st, tool: d.tool, args: d.args });
-      renderApproval();
-      if (animate) { pulse(st, "human", "talk", 800, 0.1); sysHot("human", 3000); }
-      say("human", `${who(st)} → on-call`, `asks permission to run ${d.tool} ${JSON.stringify(d.args || {})}`, ts);
-      setNow(`<span class="who" style="background:var(--hum-soft);color:var(--hum)">waiting</span> ${esc(who(st))} needs approval for <b>${esc(d.tool)}</b>`);
+      S.approvals[d.approval_id] = { id: d.approval_id, stage, tool: d.tool, args: d.args, context: d.context || {}, undo: d.undo, status: "pending", t };
+      if (s) { s.status = "waiting"; const r = s.runs[s.runs.length - 1]; if (r && !r.end) r.status = "waiting"; }
+      step(stage, { t, kind: "approval", what: `Asked you: ${d.tool}`, args: d.args, line: `Waiting for you to approve ${d.tool}` });
       break;
-    case "approval.decided":
-      S.pending = S.pending.filter((p) => p.id !== d.approval_id);
-      renderApproval();
-      if (S.status[st] === "waiting") setNode(st, "running");
-      if (animate) pulse("human", st, "talk", 700, 0.1);
-      say("human", `on-call (${d.via || "?"})`, e.text, ts);
+    case "approval.decided": {
+      const a = S.approvals[d.approval_id];
+      if (a) a.status = d.status;
+      if (s && s.status === "waiting") { s.status = "running"; const r = s.runs[s.runs.length - 1]; if (r && !r.end) r.status = "running"; }
+      step(stage, { t, kind: d.status === "approved" ? "good" : "bad", what: ev.text, line: ev.text });
+      S.feed.push({ t, kind: d.via === "policy" ? "info" : "person", by: null, text: ev.text });
       break;
-    case "agent.question":
-    case "agent.sendback":
-      if (animate) talkLine(d.from, d.to, d.message || "");
-      say(e.kind === "agent.question" ? "ask" : "back", `${d.from} → ${d.to}`, d.message, ts);
-      break;
-    case "agent.answer":
-      say("agent", `${who(st)} (answer)`, (d.answer && d.answer.summary) || e.text, ts);
-      break;
-    case "evidence":
-      addEvidence(e);
-      break;
-    case "cost":
-      setCost(Number(d.total_usd || 0));
+    }
+    case "approval.reminder":
+      S.feed.push({ t, kind: "person", by: "NightShift", text: ev.text });
       break;
     case "jira":
-      if (S.inc) { S.inc.jira_key = d.key; S.inc.jira_url = d.url; renderTitle(); }
-      if (animate) { pulse("plan", "human", "talk", 700); sysHot("human", 1500); }
-      say("sys", "jira", e.text, ts, d.url ? ` <a href="${esc(d.url)}" target="_blank" rel="noopener">open ↗</a>` : "");
+      S.jira = { key: d.key, url: d.url };
+      S.feed.push({ t, kind: "info", by: "Jira", text: ev.text, url: d.url });
       break;
-    case "incident.mitigated":
-      if (S.inc) { S.inc.status = "mitigated"; renderTitle(); }
-      say("agent", "incident", e.text, ts);
+    case "cost":
+      S.cost = d.total_usd || S.cost;
       break;
-    case "incident.resolved":
-    case "incident.escalated":
-    case "incident.closed":
-      S.tEnd = Date.parse(ts);
-      hubThinking(false);
-      if (S.inc) { S.inc.status = { "incident.resolved": "resolved", "incident.escalated": "escalated", "incident.closed": "false_alarm" }[e.kind]; renderTitle(); }
-      say(e.kind === "incident.resolved" ? "agent" : "bad", "incident", e.text, ts);
-      setNow(`<span class="who">${e.kind === "incident.resolved" ? "resolved" : "stopped"}</span> ${esc(e.text)}`);
-      break;
-    case "incident.symptom":
-      say("sys", "watcher", e.text, ts);
+    case "incident.mitigated": case "incident.resolved": case "incident.escalated": case "incident.closed": case "incident.resumed": case "incident.symptom":
+      if (ev.kind === "incident.symptom" && S.feed.some((f) => f.text === ev.text)) break;
+      S.feed.push({ t, kind: ev.kind === "incident.escalated" ? "person" : "info", by: "NightShift", text: ev.text });
+      if (S.inc) S.inc.status = { "incident.mitigated": "mitigated", "incident.resolved": "resolved", "incident.escalated": "escalated", "incident.closed": "false_alarm" }[ev.kind] || S.inc.status;
+      if (["incident.resolved", "incident.escalated", "incident.closed"].includes(ev.kind)) { S.end = t;
+        for (const x of Object.values(S.stages)) if (x.status === "running" || x.status === "waiting") { x.status = "interrupted"; closeRun(x, t, "interrupted"); } }
+      if (d.total_usd) S.cost = d.total_usd;
       break;
   }
-  renderTimeline();
 }
 
-// ---------------- loading an incident ----------------
-function resetView() {
-  S = freshState();
-  drawMap();
-  $("#talk").innerHTML = `<li class="empty">The agents' decisions, questions and answers appear here.</li>`;
-  $("#evidence").innerHTML = `<p class="empty">Log lines, traces and commits appear here as they are read.</p>`;
-  $("#approval").innerHTML = "";
-  setCost(0); renderTraffic(); renderTimeline(); renderTitle();
+function argText(a) {
+  if (!a || typeof a !== "object") return String(a ?? "");
+  return Object.entries(a).map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`).join(" ");
 }
-async function loadIncident(id) {
-  const r = await fetch(`/api/incidents/${id}`);
-  if (!r.ok) return null;
-  const inc = await r.json();
-  resetView();
-  S.id = inc.id; S.inc = inc; S.t0 = Date.parse(inc.opened_at);
-  renderTitle();
-  return inc;
-}
-async function goLive(id) {
-  stopReplay();
-  const inc = await loadIncident(id);
-  if (!inc) return;
-  const active = ["open", "mitigated"].includes(inc.status);
-  setMode(active ? "live" : "view");
-  for (const e of inc.events) apply(e, false);
-  S.pending = (inc.approvals || []).filter((a) => a.status === "pending").map((a) => ({ id: a.id, stage: a.stage, tool: a.tool, args: a.args }));
-  renderApproval();
-  setCost(Number(inc.total_cost_usd || 0));
-  if (inc.resolved_at) S.tEnd = Date.parse(inc.resolved_at);
-  else if (!active && S.lastTs) S.tEnd = S.lastTs;
-  tickElapsed();
-}
-async function replay(id) {
-  stopReplay();
-  const inc = await loadIncident(id);
-  if (!inc) return;
+
+// ---------------- loading ----------------
+async function load(id, { replay = false } = {}) {
+  view.replayTimers.forEach(clearTimeout); view.replayTimers = [];
+  fresh(id);
+  if (!id) { render(); return; }
+  const d = await (await fetch(`/api/incidents/${id}`)).json();
+  S.inc = d;
+  S.cost = Number(d.total_cost_usd) || 0;
+  if (d.jira_key) S.jira = { key: d.jira_key, url: d.jira_url };
+  S.start = d.opened_at;
+  if (!replay) {
+    d.events.forEach(apply);
+    for (const a of d.approvals || []) if (S.approvals[a.id]) { S.approvals[a.id].status = a.status; if (a.context) S.approvals[a.id].context = a.context; }
+    if (["resolved", "escalated", "false_alarm"].includes(d.status)) S.end = d.resolved_at || d.events.at(-1)?.ts;
+    S.inc.status = d.status;
+    render();
+    return;
+  }
+  // replay: the same events, time compressed (gaps capped at 1.2 s)
   setMode("replay");
-  const evs = inc.events.filter((e) => e.kind !== "watcher.tick");
-  Object.assign(S.inc, { status: "open", jira_key: null, jira_url: null, pr_url: null });
-  renderTitle();
-  let i = 0;
-  const next = () => {
-    if (i >= evs.length) { replayTimer = null; $("#replay-btn").textContent = "Replay"; return; }
-    const e = evs[i++];
-    apply(e, true);
-    const gap = i < evs.length ? Date.parse(evs[i].ts) - Date.parse(e.ts) : 0;
-    replayTimer = setTimeout(next, Math.max(90, Math.min(1400, gap / 6)));
-  };
-  $("#replay-btn").textContent = "Stop";
-  next();
-}
-function stopReplay() {
-  if (replayTimer) clearTimeout(replayTimer);
-  replayTimer = null;
-  $("#replay-btn").textContent = "Replay";
-}
-function setMode(m) {
-  mode = m;
-  $("#mode").className = "mode " + ({ live: "live", replay: "replay", view: "view" }[m] || "");
-  $("#mode-text").textContent = { live: "live", replay: "replay", view: "finished" }[m] || "watching";
+  const status = d.status; S.inc.status = "open"; S.cost = 0;
+  let at = 0, prev = null;
+  for (const ev of d.events) {
+    const gap = prev ? Math.min(1200, (new Date(ev.ts) - new Date(prev)) / 8) : 0;
+    at += gap; prev = ev.ts;
+    view.replayTimers.push(setTimeout(() => { apply(ev); render(); }, at));
+  }
+  view.replayTimers.push(setTimeout(() => { S.inc.status = status; setMode("view"); render(); }, at + 400));
+  render();
 }
 
-// ---------------- stream ----------------
+function setMode(m) {
+  view.mode = m;
+  const c = $("conn");
+  c.className = "conn " + (m === "live" ? "live" : m === "replay" ? "replay" : "");
+  c.textContent = m === "live" ? "Live" : m === "replay" ? "Replaying" : "Viewing a past incident";
+}
+
+// ---------------- rendering ----------------
+let queued = false;
+function render() { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; draw(); }); } }
+
+function draw() {
+  drawHeader(); drawStrips(); drawDetail(); drawTrack();
+}
+
+function drawHeader() {
+  const inc = S.inc;
+  if (!inc) { $("incident").innerHTML = `<span class="quiet-line">All quiet. The watcher is checking every 5 seconds.</span>`; $("cost").textContent = "₹0"; $("elapsed").textContent = "–"; return; }
+  const status = inc.status || "open";
+  const word = { open: "Being handled", mitigated: "Users no longer affected", resolved: "Resolved", escalated: "Handed to a person", false_alarm: "False alarm" }[status] || status;
+  $("incident").innerHTML = `<span class="inc-id">${esc(inc.id)}</span><span class="inc-sum" title="${esc(inc.summary)}">${esc(inc.summary)}</span>
+    <span class="state ${esc(status)}">${word}</span>${inc.severity ? `<span class="state escalated">${esc(inc.severity)}</span>` : ""}`;
+  $("cost").textContent = inr(S.cost);
+  $("elapsed").textContent = S.start ? dur((S.end ? new Date(S.end) : new Date()) - new Date(S.start)) : "–";
+}
+
+function stripHTML(a) {
+  const s = S.stages[a.stage], team = Object.values(view.team).find((t) => t.stage === a.stage) || {};
+  const calls = s.steps.filter((x) => x.kind === "call").length;
+  const took = s.runs.reduce((n, r) => n + ((r.end ? new Date(r.end) : new Date()) - new Date(r.start)), 0);
+  const lines = s.steps.filter((x) => x.line).slice(-2).map((x) => x.line);
+  const first = s.status === "done" ? (s.output?.summary || s.last) : lines.at(-1);
+  const second = s.status === "done" ? "" : lines.length > 1 ? lines[0] : "";
+  const idleLine = s.status === "idle" ? (team.sandbox ? "Runs code in a sandbox" : team.asks_before?.length ? `Asks you before ${team.asks_before.join(", ")}` : a.role) : "";
+  return `<button class="strip ${s.status} ${view.selected === a.stage ? "selected" : ""}" data-stage="${a.stage}" aria-label="${esc(a.name)}: ${STATUS_WORD[s.status]}">
+    <span class="band"></span>
+    <span class="who"><b>${esc(a.name)}</b><small>${esc(a.role)}</small></span>
+    <span class="doing">${first ? `<span class="line first">${esc(first)}</span>` : `<span class="line">${esc(idleLine)}</span>`}${second ? `<span class="line">${esc(second)}</span>` : ""}</span>
+    <span class="meta"><span class="st">${STATUS_WORD[s.status]}</span>${s.runs.length ? `<span>${calls} tool call${calls === 1 ? "" : "s"}, ${dur(took)}</span>` : `<span>${team.model || ""} model</span>`}${s.cost ? `<span>${inr(s.cost)}</span>` : ""}</span>
+  </button>`;
+}
+
+function drawStrips() {
+  const last = S.decisions.at(-1);
+  const supStatus = S.inc && S.inc.status === "open" ? "running" : S.decisions.length ? "done" : "idle";
+  let html = `<button class="strip boss ${supStatus} ${view.selected === "supervisor" ? "selected" : ""}" data-stage="supervisor">
+    <span class="band"></span>
+    <span class="who"><b>Supervisor</b><small>Chooses the next move</small></span>
+    <span class="doing"><span class="line first">${esc(last ? last.text : "Waits for triage, then decides who works next.")}</span>${last && last.because ? `<span class="line">Asked because ${esc(last.because)}</span>` : ""}</span>
+    <span class="meta"><span class="st">${S.decisions.length} decision${S.decisions.length === 1 ? "" : "s"}</span><span>${S.sup.ai} needed judgement</span></span>
+  </button>`;
+  for (const [bay, title, hint] of BAYS) {
+    html += `<div class="bay"><h3>${title} <span>${hint}</span></h3>${AGENTS.filter((a) => a.bay === bay).map(stripHTML).join("")}</div>`;
+  }
+  $("strips").innerHTML = html;
+}
+
+// ----- detail pane -----
+function pendingApproval() { return Object.values(S.approvals).find((a) => a.status === "pending"); }
+
+function decideHTML(a) {
+  const c = a.context || {}, live = c.live, opt = c.plan_option;
+  const liveTxt = live ? `<span class="live-now ${live.error_pct > (live.limit_pct ?? 5) ? "bad" : "ok"}">${live.error_pct}% errors</span> on ${esc(c.service)} (${live.failed_requests ?? "?"} failed requests in 2 min, limit ${live.limit_pct}%)` : "No live numbers for this service";
+  return `<section class="decide" aria-label="Approval needed">
+    <h2>${esc(NAME[a.stage] || a.stage)} wants to make a change</h2>
+    <div class="change">${esc(a.tool)}(${esc(argText(a.args))})</div>
+    <dl class="kv">
+      <dt>Right now</dt><dd>${liveTxt}</dd>
+      ${c.diagnosis ? `<dt>Why</dt><dd>${esc(c.diagnosis)}</dd>` : ""}
+      ${opt ? `<dt>Planner says</dt><dd>Risk ${esc(opt.risk)}, ${opt.reversible ? "reversible" : "not reversible"}${opt.blast_radius ? `; affects ${esc(opt.blast_radius)}` : ""}.
+        ${opt.speculative ? `<span class="guess">This option is a guess: no direct evidence.</span>` : opt.evidence ? `Evidence: ${esc(short(opt.evidence, 260))}` : ""}</dd>` : ""}
+      ${c.undo || a.undo ? `<dt>To undo</dt><dd>${esc(c.undo || a.undo)}</dd>` : ""}
+    </dl>
+    <div class="row">
+      <button class="btn primary" data-approve="${a.id}">Approve ${esc(a.tool)}</button>
+      <input id="deny-reason" placeholder="Reason, if you deny it" aria-label="Reason for denying">
+      <button class="btn danger" data-deny="${a.id}">Deny</button>
+    </div>
+    ${S.jira ? `<p class="alt">Or reply <b>/approve</b> or <b>/deny reason</b> on <a href="${esc(S.jira.url)}" target="_blank" rel="noopener">${esc(S.jira.key)}</a>.</p>` : ""}
+  </section>`;
+}
+
+const LABELS = { root_cause: "Root cause", suspect_commit: "Suspect commit", suspect_files: "Suspect files", failing_step: "Failing step",
+  reproduced: "Reproduced", test_file: "Test file", disproved_reason: "Why not reproduced", chosen: "Chosen", fix_needed: "Code fix needed",
+  action_taken: "Change made", result: "Result", denied: "Denied", recovered: "Recovered", passed: "Tests passed", failing_tests: "Failing tests",
+  pr_url: "Pull request", branch: "Branch", verdict: "Verdict", comments: "Comments", ci_passed: "CI passed", merged: "Merged",
+  canary_ok: "Canary healthy", promoted: "Promoted", real_incident: "Real incident", severity: "Severity", service: "Service",
+  category: "Category", external: "Outside our system", confidence: "Confidence", unverified_evidence: "Unverified evidence" };
+const LONG = ["run_output", "output", "test_output", "patch", "postmortem_md", "test_code"];
+
+function value(k, v) {
+  if (typeof v === "boolean") return `<span class="${v === (k === "denied" || k === "external" ? false : true) ? "yes" : "no"}">${v ? "Yes" : "No"}</span>`;
+  if (k === "pr_url") return `<a href="${esc(v)}" target="_blank" rel="noopener">${esc(v)}</a>`;
+  if (k === "confidence") return `${Math.round(v * 100)}%`;
+  if (Array.isArray(v)) return v.map((x) => esc(typeof x === "string" ? x : JSON.stringify(x))).join("<br>");
+  if (typeof v === "object" && v) return `<code>${esc(short(JSON.stringify(v), 300))}</code>`;
+  return esc(v);
+}
+
+function answerHTML(o) {
+  let h = `<p class="answer">${esc(o.summary || "")}</p><dl class="kv">`;
+  for (const [k, v] of Object.entries(o)) {
+    if (["summary", "evidence", "options", "files", "mitigation", "timeline", "numbers", "before", "after", "new_tool", "sources"].includes(k) || LONG.includes(k) || v === "" || v == null) continue;
+    h += `<dt>${esc(LABELS[k] || k.replace(/_/g, " "))}</dt><dd>${value(k, v)}</dd>`;
+  }
+  h += "</dl>";
+  if (Array.isArray(o.options) && o.options.length) {
+    h += `<div class="section"><h3>Options it considered</h3><table class="options"><tr><th>Action</th><th>Risk</th><th>Undo</th><th>Evidence</th></tr>` +
+      o.options.map((x) => `<tr class="${x.action === o.chosen ? "chosen" : ""}"><td>${esc(x.action)}<br><code>${esc(x.tool || "")} ${esc(argText(x.args))}</code></td><td>${esc(x.risk)}</td>
+        <td>${x.reversible ? "Reversible" : "Not reversible"}</td><td>${x.speculative ? `<span class="guess">Guess, no evidence</span>` : esc(short(x.evidence || "", 200))}</td></tr>`).join("") + `</table></div>`;
+  }
+  if (Array.isArray(o.evidence) && o.evidence.length) {
+    h += `<div class="section"><h3>Evidence</h3><ul class="evidence">` + o.evidence.map((e) => {
+      const txt = typeof e === "object" ? e.text || e.detail || JSON.stringify(e) : e;
+      const src = [esc(e.source || ""), e.link ? `<a href="${esc(e.link)}" target="_blank" rel="noopener">open the trace</a>` : "",
+        e.verified === false ? `<em>not found in any tool output</em>` : e.verified ? "checked against the tool output" : ""].filter(Boolean).join(", ");
+      return `<li class="${e.verified === false ? "unverified" : ""}">${esc(txt)}<div class="src">${src}</div></li>`;
+    }).join("") + `</ul></div>`;
+  }
+  for (const k of LONG) if (o[k]) h += `<div class="section"><h3>${esc({ run_output: "Test run output", output: "Output", test_output: "Test output", patch: "The change", postmortem_md: "Postmortem", test_code: "Reproduction test" }[k])}</h3><pre class="out">${esc(o[k])}</pre></div>`;
+  return h;
+}
+
+function resultText(r) {
+  const p = parse(r);
+  if (p && typeof p === "object" && p.response && "result" in p.response) return `exit code ${p.response.exitCode}\n${p.response.result}`;
+  return typeof p === "string" ? p : JSON.stringify(p, null, 1);
+}
+
+function stepsHTML(steps) {
+  if (!steps.length) return `<p class="note">Nothing yet.</p>`;
+  return `<ol class="steps">` + steps.map((x) => {
+    let body = "";
+    if (x.kind === "call") {
+      const cmd = x.tool === "exec" ? x.args?.command : argText(x.args);
+      body = `${cmd ? `<code class="args">${esc(short(cmd, 600))}</code>` : ""}${x.result != null ? `<details><summary>What it got back</summary><pre class="out">${esc(resultText(x.result))}</pre></details>` : ""}`;
+    } else if (x.kind === "approval") body = `<code class="args">${esc(argText(x.args))}</code>`;
+    return `<li class="${x.kind}"><span class="t">${clock(x.t)}</span><span class="what">${esc(x.what)}</span>${body}</li>`;
+  }).join("") + `</ol>`;
+}
+
+function agentHTML(stage) {
+  if (stage === "supervisor") {
+    return `<h2>Supervisor</h2><p class="sub">After every step it reads each agent's latest answer and picks the next move: run an agent, ask one a question, send work back, hand over to a person, or finish. Code checks every choice against the guardrails. When there is only one sensible move, the rules decide and the supervisor is not called.</p>
+      <div class="facts"><span><b>${S.decisions.length}</b> decisions</span><span><b>${S.sup.ai}</b> needed judgement</span><span><b>${S.decisions.length - S.sup.ai}</b> clear next steps</span></div>
+      <div class="section"><h3>Its decisions</h3><ul class="feed">${S.decisions.map((x) => `<li><span class="t">${clock(x.t)}</span><span class="by">${x.by === "rules" ? "Rules" : "Supervisor"}:</span> ${esc(x.text)}
+        ${x.because ? `<div class="because">Asked because ${esc(x.because)}.${x.url ? ` <a href="${esc(x.url)}" target="_blank" rel="noopener">Its reasoning in TrueForge</a>` : ""}</div>` : ""}</li>`).join("") || `<li class="note">No decisions yet.</li>`}</ul></div>`;
+  }
+  const a = AGENTS.find((x) => x.stage === stage), s = S.stages[stage];
+  const team = Object.values(view.team).find((t) => t.stage === stage) || {};
+  const tools = Object.entries(team.tools || {}).map(([srv, ts]) => `${srv}: ${ts.join(", ")}`).join("; ");
+  const took = s.runs.reduce((n, r) => n + ((r.end ? new Date(r.end) : new Date()) - new Date(r.start)), 0);
+  return `<h2>${esc(a.name)}</h2><p class="sub">${esc(team.job || a.role)}</p>
+    <div class="facts"><span><b>${STATUS_WORD[s.status]}</b></span>${team.model ? `<span>${esc(team.model)} model</span>` : ""}
+      ${s.runs.length ? `<span>${s.runs.length} run${s.runs.length > 1 ? "s" : ""}, ${dur(took)}</span>` : ""}${s.cost ? `<span>${inr(s.cost)}</span>` : ""}
+      ${team.sandbox ? `<span>Runs code in a sandbox</span>` : ""}${team.asks_before?.length ? `<span>Asks you before ${esc(team.asks_before.join(", "))}</span>` : ""}
+      ${s.session ? `<a href="${esc(s.session)}" target="_blank" rel="noopener">Full session in TrueForge</a>` : ""}</div>
+    ${s.output ? `<div class="section"><h3>Its answer</h3>${answerHTML(s.output)}</div>` : ""}
+    <div class="section"><h3>What it did</h3>${stepsHTML(s.steps)}</div>
+    ${tools ? `<div class="section"><h3>Tools it may use</h3><p class="note">${esc(tools)}</p></div>` : ""}`;
+}
+
+function overviewHTML() {
+  if (!S.inc) {
+    return `<h2>Nothing needs you</h2><p class="sub">When a service keeps failing, the watcher opens an incident and the agents start work here. Click any agent on the left to see what it does.</p>
+      <div class="section"><h3>Recent incidents</h3><div id="recent"><p class="note">Loading…</p></div></div>`;
+  }
+  const inc = S.inc;
+  return `<h2>What is happening</h2><p class="sub">${esc(inc.summary)}</p>
+    <div class="facts">${S.jira ? `<a href="${esc(S.jira.url)}" target="_blank" rel="noopener">Jira ${esc(S.jira.key)}</a>` : ""}${inc.pr_url ? `<a href="${esc(inc.pr_url)}" target="_blank" rel="noopener">Pull request</a>` : ""}
+      <span>Opened ${clock(inc.opened_at || S.start)}</span></div>
+    <div class="section"><h3>Decisions and conversation</h3><ul class="feed">${S.feed.slice().reverse().map((f) => `<li class="${f.kind === "person" ? "person" : ""}"><span class="t">${clock(f.t)}</span>${f.by ? `<span class="by">${esc(f.by)}:</span> ` : ""}${esc(f.text)}
+      ${f.because ? `<div class="because">Supervisor asked because ${esc(f.because)}.</div>` : ""}${f.url && f.kind === "info" ? ` <a href="${esc(f.url)}" target="_blank" rel="noopener">open</a>` : ""}</li>`).join("") || `<li class="note">Starting…</li>`}</ul></div>`;
+}
+
+function drawDetail() {
+  const p = pendingApproval();
+  let sel = view.selected;
+  if (view.follow) {
+    const running = AGENTS.find((a) => ["waiting", "running"].includes(S.stages[a.stage].status));
+    sel = running ? running.stage : null;
+  }
+  const body = sel ? agentHTML(sel) : overviewHTML();
+  const openDetails = [...$("detail").querySelectorAll("details[open]")].map((d) => d.dataset.k);
+  const reason = $("deny-reason")?.value || "";
+  $("detail").innerHTML = (p ? decideHTML(p) : "") + body + (sel ? `<p style="margin-top:22px"><button class="btn small" id="back">Back to the overview</button></p>` : "");
+  if ($("deny-reason")) $("deny-reason").value = reason;
+  $("detail").querySelectorAll("details").forEach((d, i) => { d.dataset.k = i; if (openDetails.includes(String(i))) d.open = true; });
+  if (!S.inc && $("recent")) loadRecent();
+}
+
+async function loadRecent() {
+  const rows = await (await fetch("/api/incidents?limit=6")).json();
+  const el = $("recent"); if (!el) return;
+  el.innerHTML = rows.length ? `<table class="table">${rows.map((r) => `<tr class="link" data-open="${r.id}"><td>${esc(r.id)}</td><td>${esc(short(r.summary, 90))}</td><td><span class="state ${esc(r.status)}">${esc(r.status.replace("_", " "))}</span></td></tr>`).join("")}</table>` : `<p class="note">No incidents yet.</p>`;
+}
+
+// ----- timeline -----
+function drawTrack() {
+  if (!S.start) { $("track").innerHTML = `<div class="empty">The timeline of an incident appears here.</div>`; $("axis").innerHTML = ""; return; }
+  const t0 = new Date(S.start).getTime(), t1 = S.end ? new Date(S.end).getTime() : Date.now(), span = Math.max(t1 - t0, 30000);
+  const x = (t) => ((new Date(t).getTime() - t0) / span) * 100;
+  let h = "";
+  for (const a of AGENTS) for (const r of S.stages[a.stage].runs) {
+    const l = x(r.start), w = Math.max(0.6, x(r.end || t1) - l);
+    h += `<button class="seg ${r.status}" style="left:${l}%;width:${w}%" data-stage="${a.stage}" title="${esc(a.name)}: ${dur(new Date(r.end || t1) - new Date(r.start))}">${w > 5 ? esc(a.name) : ""}</button>`;
+  }
+  for (const ap of Object.values(S.approvals)) h += `<span class="pin" style="left:${x(ap.t)}%" title="Asked you: ${esc(ap.tool)}"></span>`;
+  $("track").innerHTML = h;
+  let ax = "";
+  for (let i = 0; i <= 4; i++) ax += `<span style="left:${i * 25}%">${dur((span * i) / 4)}</span>`;
+  $("axis").innerHTML = ax;
+}
+
+// ----- the shop -----
+function drawSystem(w) {
+  if (!w) return;
+  view.watch = w;
+  const b = $("blind");
+  if (w.blind) { b.hidden = false; b.textContent = w.blind.reason; } else b.hidden = true;
+  const services = Object.entries(w.services || {}).sort((a, b) => (b[1].over - a[1].over) || (b[1].error_pct - a[1].error_pct));
+  $("services").innerHTML = services.map(([n, v]) => {
+    const pct = Math.min(100, v.error_pct), lim = Math.min(100, v.limit_pct || 5);
+    const why = v.op ? `${v.op.name.split("/").pop()} fails ${v.op.error_pct}% (${v.op.failed_requests} failed), for ${v.over_for_s}s`
+      : v.state === "over" ? `Over its ${v.limit_pct}% limit for ${v.over_for_s}s (opens at ${v.fires_after_s}s)`
+      : v.state === "quiet" ? (v.rps ? "Too few requests to judge; waiting" : "No traffic") : `${v.rps} requests a second`;
+    return `<li class="${v.state}"><span class="svc">${esc(n)}</span><span class="pct">${v.error_pct}%</span>
+      <span class="meter"><i style="width:${Math.max(pct, 0.5)}%"></i><b style="left:${lim}%"></b></span><span class="why">${esc(why)}</span></li>`;
+  }).join("");
+  $("signals").innerHTML = Object.entries(w.signals || {}).map(([n, v]) => `<li class="${v.over ? "over" : ""}">${esc(n)}: ${v.value} ${v.over ? `(limit ${v.above})` : ""}<br><span class="note">${esc(v.explain)}</span></li>`).join("") || `<li class="note">None configured.</li>`;
+  const p = w.synthetic;
+  if (p) {
+    $("probe").innerHTML = `<p class="verdict ${p.passed ? "ok" : "bad"}">${p.passed ? "Passed" : "Failed"}: ${p.flow === "checkout" ? "bought something" : "filled a cart"}</p>
+      <ol>${p.steps.map((s) => `<li class="${s.ok ? "" : "bad"}">${esc(s.step)}${s.ok ? "" : `: ${esc(short(s.detail, 90))}`}</li>`).join("")}</ol>`;
+  }
+}
+
+// ---------------- sheet: incidents, team, connections, system ----------------
+async function sheet(tab = "incidents") {
+  document.querySelectorAll("#sheet-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+  const body = $("sheet-body");
+  body.innerHTML = `<p class="note">Loading…</p>`;
+  if (tab === "incidents") {
+    const rows = await (await fetch("/api/incidents?limit=40")).json();
+    body.innerHTML = `<table class="table"><tr><th>Incident</th><th>What happened</th><th>Outcome</th><th>Cost</th><th></th></tr>${rows.map((r) => `<tr class="link" data-open="${r.id}">
+      <td><b>${esc(r.id)}</b><br><span class="note">${new Date(r.opened_at).toLocaleString()}</span></td><td>${esc(short(r.summary, 140))}</td>
+      <td><span class="state ${esc(r.status)}">${esc(r.status.replace("_", " "))}</span></td><td>${inr(Number(r.total_cost_usd))}</td>
+      <td><button class="btn small" data-replay="${r.id}">Replay</button></td></tr>`).join("")}</table>`;
+  } else if (tab === "team") {
+    const team = Object.values(view.team);
+    body.innerHTML = `<table class="table"><tr><th>Agent</th><th>Job</th><th>Model</th><th>Asks you before</th><th>Runs code</th></tr>${team.map((t) => `<tr>
+      <td><b>${esc(NAME[t.stage] || t.name)}</b><br><span class="note">${esc(t.name)}</span></td><td>${esc(t.job)}</td><td>${esc(t.model)}</td>
+      <td>${esc((t.asks_before || []).join(", ") || "Nothing, read-only")}</td><td>${t.sandbox ? "In a sandbox" : "No"}</td></tr>`).join("")}</table>`;
+  } else if (tab === "connections") {
+    const c = await (await fetch("/api/connections")).json();
+    const name = { trueforge: "TrueForge (agents)", prometheus: "Prometheus (metrics)", ops_mcp: "Ops server (the agents' door to the shop)", jira: "Jira (tickets and approvals)", slack: "Slack (notifications)" };
+    body.innerHTML = `<table class="table">${Object.entries(c).map(([k, v]) => `<tr><td><span class="${v.ok ? "ok-dot" : "bad-dot"}"></span><b>${esc(name[k] || k)}</b></td>
+      <td>${esc(typeof v.detail === "object" ? JSON.stringify(v.detail) : v.detail ?? "")}${v.mcp_servers ? `<br><span class="note">MCP servers: ${esc(Object.entries(v.mcp_servers).map(([n, s]) => `${n} (${s || "ok"})`).join(", "))}</span>` : ""}</td></tr>`).join("")}</table>`;
+  } else {
+    const s = await (await fetch("/api/system")).json();
+    body.innerHTML = `<p class="note">systems/${esc(s.name)}.yaml: everything NightShift knows about the system it watches. Another system needs only another file like this.</p><pre class="out" style="max-height:none">${esc(JSON.stringify(s, null, 2))}</pre>`;
+  }
+}
+
+// ---------------- events from the page ----------------
+document.addEventListener("click", async (e) => {
+  const strip = e.target.closest("[data-stage]");
+  if (strip && !e.target.closest("a")) {
+    view.selected = strip.dataset.stage; view.follow = false; syncFollow(); render(); return;
+  }
+  if (e.target.id === "back") { view.selected = null; view.follow = false; syncFollow(); render(); return; }
+  const ap = e.target.dataset.approve || e.target.dataset.deny;
+  if (ap) {
+    const deny = !!e.target.dataset.deny;
+    e.target.disabled = true;
+    const r = await fetch(`/api/approvals/${ap}`, { method: "POST", headers: { "content-type": "application/json", ...auth() },
+      body: JSON.stringify({ decision: deny ? "deny" : "approve", reason: deny ? ($("deny-reason")?.value || "denied from the dashboard") : "" }) });
+    if (r.status === 401) { signIn(); e.target.disabled = false; return; }
+    if (!r.ok) { alert((await r.json()).detail || "Could not record the decision"); e.target.disabled = false; }
+    return;
+  }
+  const replay = e.target.dataset.replay;
+  if (replay) { $("sheet").close(); view.follow = true; syncFollow(); location.hash = replay; await load(replay, { replay: true }); return; }
+  const open = e.target.closest("[data-open]");
+  if (open) { $("sheet").close(); location.hash = open.dataset.open; return; }
+  const tab = e.target.dataset.tab;
+  if (tab) sheet(tab);
+});
+$("menu-btn").onclick = () => { $("sheet").showModal(); sheet("incidents"); };
+$("follow").onclick = () => { view.follow = !view.follow; if (view.follow) view.selected = null; syncFollow(); render(); };
+function syncFollow() { $("follow").setAttribute("aria-pressed", view.follow); $("follow").textContent = view.follow ? "Following the live agent" : "Follow the live agent"; }
+
+function auth() { const t = localStorage.getItem("ns_token"); return t ? { authorization: `Bearer ${t}` } : {}; }
+function signIn() {
+  const t = prompt("Approvals need your NightShift sign-in token (from DASHBOARD_USERS in .env):");
+  if (t) { localStorage.setItem("ns_token", t.trim()); document.cookie = `ns_token=${encodeURIComponent(t.trim())}; path=/; SameSite=Strict`; }
+}
+
+// ---------------- live stream ----------------
 function connect() {
   const es = new EventSource("/api/stream");
-  es.addEventListener("hello", (m) => { renderWatch(JSON.parse(m.data).watch); });
-  es.addEventListener("message", async (m) => {
-    const e = JSON.parse(m.data);
-    if (e.kind === "watcher.tick") { if (mode !== "replay") renderWatch(e.data); return; }
-    if (e.kind === "incident.opened" && e.incident_id !== S.id) { await goLive(e.incident_id); return; }
-    if ((mode === "live" || mode === "view") && e.incident_id === S.id) {
-      apply(e, true);
-      if (["stage.done", "jira", "incident.resolved", "incident.escalated"].includes(e.kind)) {
-        const r = await fetch(`/api/incidents/${S.id}`);
-        if (r.ok) {
-          const inc = await r.json();
-          Object.assign(S.inc, { status: inc.status, severity: inc.severity, jira_key: inc.jira_key, jira_url: inc.jira_url, pr_url: inc.pr_url, summary: inc.summary });
-          renderTitle();
-        }
-      }
-    }
-  });
-  es.onerror = () => { if (mode !== "replay") { $("#mode").className = "mode"; $("#mode-text").textContent = "reconnecting"; } };
-  es.onopen = () => { if (mode !== "replay") setMode(mode); };
+  es.addEventListener("hello", (m) => { if (view.mode !== "replay") setMode(location.hash ? "view" : "live"); drawSystem(JSON.parse(m.data).watch); });
+  es.onmessage = async (m) => {
+    const ev = JSON.parse(m.data);
+    if (ev.kind === "watcher.tick") { drawSystem(ev.data); return; }
+    if (view.mode === "replay") return;
+    if (ev.kind === "incident.opened" && view.mode === "live") { await load(ev.incident_id); return; }
+    if (ev.incident_id && ev.incident_id === S.id) { apply(ev); render(); }
+  };
+  es.onerror = () => { $("conn").className = "conn"; $("conn").textContent = "Reconnecting"; };
 }
 
-// ---------------- drawer ----------------
-function openDrawer(view = "history") {
-  $("#drawer").hidden = false;
-  $("#menu-btn").setAttribute("aria-expanded", "true");
-  document.querySelectorAll(".drawer-h nav button").forEach((b) => b.classList.toggle("on", b.dataset.v === view));
-  ({ history: showHistory, connections: showConnections, system: showSystem })[view]();
+async function route() {
+  const [id, agent] = location.hash.replace("#", "").split("/");
+  if (agent) { view.selected = agent; view.follow = false; syncFollow(); }
+  if (id) { setMode("view"); await load(id); return; }
+  setMode("live");
+  const rows = await (await fetch("/api/incidents?limit=5")).json();
+  const active = rows.find((r) => r.status === "open" || r.status === "mitigated");
+  await load(active ? active.id : null);
 }
-function closeDrawer() { $("#drawer").hidden = true; $("#menu-btn").setAttribute("aria-expanded", "false"); }
-async function showHistory() {
-  const rows = await (await fetch("/api/incidents")).json();
-  $("#drawer-b").innerHTML = `<table><thead><tr><th>Incident</th><th>Service</th><th>Status</th><th>Opened</th><th>Cost</th><th></th></tr></thead><tbody>
-    ${rows.map((i) => `<tr data-id="${esc(i.id)}"><td><b>${esc(i.id)}</b><div class="muted small">${esc(i.summary || "")}</div></td>
-    <td>${esc(i.service)}</td><td>${esc(i.status)}</td><td>${new Date(i.opened_at).toLocaleString()}</td>
-    <td>₹${(Number(i.total_cost_usd || 0) * USD_INR).toFixed(2)}</td>
-    <td><button class="ghost" data-replay="${esc(i.id)}">Replay</button></td></tr>`).join("") || `<tr><td colspan="6" class="muted">No incidents yet.</td></tr>`}
-    </tbody></table>`;
-  document.querySelectorAll("#drawer-b tr[data-id]").forEach((tr) => tr.onclick = (ev) => {
-    closeDrawer();
-    if (ev.target.dataset.replay) replay(ev.target.dataset.replay); else goLive(tr.dataset.id);
-  });
-}
-async function showConnections() {
-  $("#drawer-b").innerHTML = `<p class="muted">Checking…</p>`;
-  const c = await (await fetch("/api/connections")).json();
-  const box = (name, ok, detail, warn) => `<div class="cbox ${ok ? "ok" : warn ? "warn" : ""}"><b><span class="dot"></span>${esc(name)}</b><div class="d">${esc(detail ?? "")}</div></div>`;
-  const tf = c.trueforge || {};
-  $("#drawer-b").innerHTML = `<div class="conns">${[
-    box("TrueForge", tf.ok, `v${tf.detail || "?"} · ${tf.model_providers ?? 0} model provider · ${(tf.agents || []).length} agents`),
-    ...Object.entries(tf.mcp_servers || {}).map(([n, s]) => box(`MCP · ${n}`, s === "authenticated" || s === "not_required", s, s === "auth_required")),
-    box("Ops MCP (live)", c.ops_mcp?.ok, c.ops_mcp?.detail), box("Prometheus", c.prometheus?.ok, c.prometheus?.ok ? "ready" : c.prometheus?.detail),
-    box("Jira approvals", c.jira?.ok, c.jira?.detail, !c.jira?.ok), box("Slack", c.slack?.ok, c.slack?.detail, !c.slack?.ok),
-  ].join("")}</div><p class="muted small" style="margin-top:12px">Agents: ${esc((tf.agents || []).join(", "))}</p>`;
-}
-async function showSystem() {
-  const s = await (await fetch("/api/system")).json();
-  $("#drawer-b").innerHTML = `<p class="muted">Everything NightShift knows about this system comes from <code>systems/${esc(s.name)}.yaml</code>. A new system needs a new file, not new agent code.</p><pre>${esc(JSON.stringify(s, null, 2))}</pre>`;
-}
-document.querySelectorAll(".drawer-h nav button").forEach((b) => b.addEventListener("click", () => openDrawer(b.dataset.v)));
-$("#menu-btn").onclick = () => openDrawer("history");
-$("#drawer-close").onclick = closeDrawer;
-$("#drawer").addEventListener("click", (e) => { if (e.target.id === "drawer") closeDrawer(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+window.addEventListener("hashchange", route);
 
-$("#replay-btn").onclick = async () => {
-  if (replayTimer) { stopReplay(); setMode("idle"); return; }
-  const rows = await (await fetch("/api/incidents")).json();
-  const target = rows.find((i) => ["resolved", "escalated"].includes(i.status)) || rows[0];
-  if (target) replay(target.id); else setNow(`<span class="muted">No incidents to replay yet.</span>`);
-};
-
-// ---------------- start ----------------
 (async function start() {
-  resetView();
-  setMode("idle");
+  const team = await (await fetch("/api/agents")).json();
+  for (const t of team) view.team[t.name] = t;
+  fetch("/api/system").then((r) => r.json()).then((s) => { $("sys").textContent = s.name; });
+  fetch("/api/watch").then((r) => r.json()).then(drawSystem);
+  await route();
   connect();
-  fetch("/api/watch").then((r) => r.json()).then(renderWatch).catch(() => {});
-  const rows = await (await fetch("/api/incidents")).json();
-  const active = rows.find((i) => ["open", "mitigated"].includes(i.status));
-  if (location.hash === "#replay" && rows.length) { $("#replay-btn").click(); return; }
-  if (location.hash.startsWith("#view-")) { goLive(location.hash.slice(6)); return; }
-  if (active) goLive(active.id);
-  else setNow(rows.length ? `<span class="muted">Idle. The watcher is running. Press <b>Replay</b> to watch the last incident.</span>` : `<span class="muted">Idle. The watcher is running.</span>`);
+  setInterval(() => { if (S.inc && !S.end) { drawHeader(); drawTrack(); } }, 1000);
 })();

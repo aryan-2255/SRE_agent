@@ -5,93 +5,71 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NightShift</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;500;600;700;800&family=Chivo+Mono:wght@400;500;600&display=swap">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="bar">
+<header class="top">
   <div class="brand">
-    <svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 3.5a8.5 8.5 0 1 0 5 15.4A9 9 0 0 1 15.5 3.5z"/></svg>
-    <b>NightShift</b>
-    <span class="sys" id="sys">astronomy-shop</span>
+    <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="6" width="26" height="6" rx="1.5"/><rect x="3" y="14" width="26" height="6" rx="1.5" class="lit"/><rect x="3" y="22" width="26" height="6" rx="1.5"/></svg>
+    <span class="name">NightShift</span>
+    <span class="watching">watching <b id="sys">astronomy-shop</b></span>
   </div>
 
-  <div class="inc-title" id="inc-title"><span class="muted">No active incident</span></div>
+  <div class="incident" id="incident">
+    <span class="quiet-line">All quiet. The watcher is checking every 5 seconds.</span>
+  </div>
 
-  <div class="bar-right">
-    <div class="metric"><span class="k">cost</span><span class="v" id="cost">₹0.00</span></div>
-    <div class="metric"><span class="k">elapsed</span><span class="v" id="elapsed">—</span></div>
-    <div class="mode" id="mode"><span class="dot"></span><span id="mode-text">connecting</span></div>
-    <button class="ghost" id="replay-btn" title="Replay the most recent incident">Replay</button>
-    <button class="ghost" id="menu-btn" aria-expanded="false">Menu</button>
+  <div class="top-right">
+    <div class="figure"><span id="cost">₹0</span><small>spent on this incident</small></div>
+    <div class="figure"><span id="elapsed">–</span><small>since it started</small></div>
+    <span class="conn" id="conn" title="Live connection to NightShift">Connecting</span>
+    <button class="btn" id="menu-btn" aria-haspopup="dialog">Incidents and setup</button>
   </div>
 </header>
 
-<main class="room">
-  <!-- LEFT: the system being watched -->
-  <aside class="col left">
-    <section class="card fill">
-      <div class="card-h"><span>Watcher</span><span class="tag ok" id="watch-state">rules · no AI</span></div>
-      <p class="hint">Checks every 5 s. Opens an incident only when a service stays over its limit.</p>
-      <ol class="svc" id="svc"></ol>
-    </section>
-    <section class="card">
-      <div class="card-h"><span>Synthetic customer</span></div>
-      <div class="synth" id="synth">waiting for first check…</div>
-    </section>
-    <section class="card">
-      <div class="card-h"><span>Tool traffic</span><span class="muted small" id="tool-total">0 calls</span></div>
-      <ul class="traffic" id="traffic"></ul>
-    </section>
+<div class="blind" id="blind" hidden></div>
+
+<main class="floor">
+  <aside class="system" aria-label="The system being watched">
+    <h2>The shop right now</h2>
+    <p class="note" id="watch-note">Errors per service over the last 2 minutes, against each service's limit.</p>
+    <ul class="services" id="services"></ul>
+    <h3>Things error rates miss</h3>
+    <ul class="signals" id="signals"></ul>
+    <h3>Test customer</h3>
+    <div class="probe" id="probe"><p class="note">Waiting for the first run.</p></div>
   </aside>
 
-  <!-- CENTER: the agent network -->
-  <section class="stage">
-    <svg id="net" viewBox="0 0 1200 800" role="img" aria-label="Live network of NightShift agents around the supervisor, with the systems they reach"></svg>
-    <div class="legend">
-      <span><i class="lg run"></i>working</span>
-      <span><i class="lg wait"></i>waiting for a human</span>
-      <span><i class="lg done"></i>done</span>
-      <span><i class="lg fail"></i>failed</span>
-      <span><i class="lg talk"></i>agents talking</span>
-      <span><i class="lg tool"></i>tool call</span>
+  <section class="rack" aria-label="The agents">
+    <div class="rack-head">
+      <h2>Who is working on it</h2>
+      <button class="btn small" id="follow" aria-pressed="true">Following the live agent</button>
     </div>
-    <div class="now" id="now"><span class="muted">Idle. The watcher is running.</span></div>
+    <div id="strips"></div>
   </section>
 
-  <!-- RIGHT: humans + conversation + evidence -->
-  <aside class="col right">
-    <div id="approval"></div>
-    <section class="card grow">
-      <div class="card-h"><span>Conversation</span><span class="muted small">who decided what, and why</span></div>
-      <ol class="talk" id="talk"><li class="empty">The agents' decisions, questions and answers appear here.</li></ol>
-    </section>
-    <section class="card grow">
-      <div class="card-h"><span>Evidence</span><span class="muted small">exactly what the agents read</span></div>
-      <div class="evidence" id="evidence"><p class="empty">Log lines, traces and commits appear here as they are read.</p></div>
-    </section>
-  </aside>
+  <aside class="detail" id="detail" aria-live="polite"></aside>
 </main>
 
-<footer class="timeline">
-  <div class="tl-h"><span>Timeline</span><span class="muted small" id="tl-range"></span></div>
-  <div class="tl" id="tl"></div>
+<footer class="track" aria-label="Incident timeline">
+  <div class="track-bar" id="track"></div>
+  <div class="track-axis" id="axis"></div>
 </footer>
 
-<!-- drawer: history, connections, system -->
-<div class="drawer" id="drawer" hidden>
-  <div class="drawer-in">
-    <div class="drawer-h">
-      <nav>
-        <button data-v="history" class="on">Incidents</button>
-        <button data-v="connections">Connections</button>
-        <button data-v="system">System file</button>
-      </nav>
-      <button class="ghost" id="drawer-close">Close</button>
-    </div>
-    <div class="drawer-b" id="drawer-b"></div>
-  </div>
-</div>
+<dialog class="sheet" id="sheet">
+  <form method="dialog" class="sheet-head">
+    <nav id="sheet-tabs">
+      <button type="button" data-tab="incidents" class="on">Incidents</button>
+      <button type="button" data-tab="team">The team</button>
+      <button type="button" data-tab="connections">Connections</button>
+      <button type="button" data-tab="system">System file</button>
+    </nav>
+    <button class="btn" value="close">Close</button>
+  </form>
+  <div class="sheet-body" id="sheet-body"></div>
+</dialog>
 
 <script src="app.js"></script>
 </body>

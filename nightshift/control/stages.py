@@ -208,7 +208,7 @@ class TrueForgeRunner:
                     if not auto:
                         jira.comment(inc and inc["jira_key"], approvals.describe(tool, args, context) + "\nReply /approve or /deny <reason>.")
                     if auto:
-                        approvals.decide(a["id"], "approve", "policy", "autonomy policy")
+                        approvals.decide(a["id"], "approve", "policy", "autonomy policy", "team updates need no approval")
                     db.q("update stages set status='waiting_approval' where incident_id=%s and name=%s and status='running'",
                          incident_id, stage)
                     decided = approvals.wait_or_expire(a["id"], inc and inc["jira_key"])

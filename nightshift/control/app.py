@@ -114,6 +114,27 @@ def decide(approval_id: int, body: Decision, request: Request):
     return _json(row)
 
 
+@app.get("/api/agents")
+def agents():
+    """Who is on the team: each agent's job, model tier, tools, which tools wait for a person, and its runtime."""
+    stage_of = {v: k for k, v in orchestrator.AGENTS.items()}
+    stage_of["ns-supervisor"] = "supervisor"
+    out = []
+    for f in sorted((settings.ROOT / "agents").glob("ns-*.json")):
+        spec = json.loads(f.read_text())
+        m = spec["manifest"]
+        cfg = m.get("config", {})
+        out.append({
+            "name": spec["name"], "stage": stage_of.get(spec["name"]), "job": spec["description"],
+            "model": {"$SMALL": "small", "$STRONG": "strong"}.get(m["model"]["name"], m["model"]["name"]),
+            "tools": {s["name"]: s.get("enable_tools", []) for s in m.get("mcp_servers", [])},
+            "asks_before": [t for s in m.get("mcp_servers", []) for t in s.get("require_approval_for_tools", [])],
+            "sandbox": cfg.get("sandbox", {}).get("enabled", False),
+            "sub_agents": cfg.get("dynamic_sub_agents", {}).get("enabled", False),
+        })
+    return out
+
+
 @app.get("/api/watch")
 def watch():
     return _json(watcher.latest)

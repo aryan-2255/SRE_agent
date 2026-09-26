@@ -34,7 +34,7 @@ services:
   ad:              { language: java,       path: src/ad,              slo: { max_error_pct: 5 } }
   accounting:      { language: csharp,     path: src/accounting,      slo: { max_error_pct: 5 }, depends_on: [kafka] }
   fraud-detection: { language: kotlin,     path: src/fraud-detection, slo: { max_error_pct: 5 }, depends_on: [kafka] }
-  agent:           { language: python,     path: src/agent,           slo: { max_error_pct: 35 }, depends_on: [product-catalog] }   # baseline ~17% errors
+  agent:           { language: python,     path: src/agent,           slo: { max_error_pct: 35, max_op_error_pct: 100 }, depends_on: [product-catalog] }   # baseline ~17% errors (LLM calls)
   # infrastructure: no request metrics of their own, but agents may restart them
   kafka:           { language: infra, path: src/kafka }
   valkey-cart:     { language: infra, path: src/valkey-cart }
@@ -56,7 +56,8 @@ signals:
     explain: checkout is publishing orders but accounting has processed none in 2 minutes
 # window: metrics window; for / demo_for: how long a problem must last. A problem needs min_failures failed requests in
 # the window (or min_rps of traffic) to count; with less traffic the timer pauses instead of resetting.
-watch: { window: 2m, for: 2m, demo_for: 30s, min_rps: 0.05, min_failures: 3, poll_seconds: 5, blind_after_s: 60 }
+# op_error_pct: the limit for any single operation (endpoint), so one broken endpoint cannot hide in a service's average.
+watch: { window: 2m, for: 2m, demo_for: 30s, min_rps: 0.05, min_failures: 3, op_error_pct: 20, poll_seconds: 5, blind_after_s: 60 }
 autonomy:
   auto: [notify]               # internal team updates need no approval. Night mode adds: rollback, restart_service
   ask: [rollback, restart_service, scale_service, set_flag, deploy, deploy_canary, promote_canary, create_pull_request, merge_pull_request]

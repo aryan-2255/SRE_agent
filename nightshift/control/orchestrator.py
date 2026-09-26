@@ -314,7 +314,7 @@ class Pipeline:
             return {**hint, "reason": "rule-based order", "by": "rules"}
         why = self.needs_judgement(moves, hint)
         if not why:
-            return {**hint, "reason": hint.get("reason") or "clear next step; supervisor not needed", "by": "rules"}
+            return {**hint, "reason": hint.get("reason") or "the next step is clear, so the rules decided", "by": "rules"}
         payload = {
             "incident": {k: self.inc.get(k) for k in ("id", "service", "severity", "category", "summary")},
             "latest_answers": self._brief(),

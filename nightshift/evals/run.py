@@ -26,8 +26,18 @@ API = "http://localhost:8090"
 c = httpx.Client(base_url=API, timeout=30)
 
 
+def get(path: str):
+    """GET that rides out a NightShift restart (it continues unfinished incidents on start)."""
+    for _ in range(20):
+        try:
+            return c.get(path).json()
+        except httpx.HTTPError:
+            time.sleep(3)
+    raise RuntimeError(f"NightShift did not answer {path}")
+
+
 def incidents() -> list[dict]:
-    return c.get("/api/incidents").json()
+    return get("/api/incidents")
 
 
 def flag(name: str, variant: str) -> None:
@@ -63,7 +73,7 @@ def run(sc: dict) -> dict:
                 if exp.get("incident") is False:
                     break
             if inc:
-                d = c.get(f"/api/incidents/{inc['id']}").json()
+                d = get(f"/api/incidents/{inc['id']}")
                 for a in d["approvals"]:
                     if a["status"] != "pending" or a["id"] in seen_approvals:
                         continue
@@ -88,7 +98,7 @@ def run(sc: dict) -> dict:
         elif brk["chaos"] == "payment-bug":
             chaos("fix", "")
     if inc:
-        d = c.get(f"/api/incidents/{inc['id']}").json()
+        d = get(f"/api/incidents/{inc['id']}")
         diag = next((s["output"] for s in reversed(d["stages"]) if s["name"] == "diagnosis" and s["output"]), {}) or {}
         tri = next((s["output"] for s in d["stages"] if s["name"] == "triage" and s["output"]), {}) or {}
         text = json.dumps([diag.get("root_cause"), diag.get("summary"), tri.get("summary")]).lower()

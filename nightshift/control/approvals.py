@@ -96,7 +96,9 @@ def decide(approval_id: int, decision: str, via: str, by: str = "", reason: str 
     )
     if not row:
         return None
-    bus.publish("approval.decided", f"{row['tool']} {status} via {via}" + (f" by {by}" if by else "") + (f": {reason}" if reason else ""),
+    text = (f"{row['tool']} {status} automatically ({reason or by or 'policy'})" if via == "policy"
+            else f"{by or 'Someone'} {status} {row['tool']} on {via}" + (f": {reason}" if reason else ""))
+    bus.publish("approval.decided", text,
                 row["incident_id"], row["stage"], {"approval_id": approval_id, "status": status, "via": via, "by": by})
     ev = _waiters.get(approval_id)
     if ev:

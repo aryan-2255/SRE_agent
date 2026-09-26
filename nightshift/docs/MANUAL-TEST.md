@@ -4,18 +4,13 @@ Two ways to cause the incident: the **ready-made bug** (one command) or **your o
 
 ## 0. Everything running?
 
-Four terminals, all from `truforge_hackthon/nightshift`:
+From `truforge_hackthon/nightshift`:
 
 ```bash
-# 1. the shop (skip if `../astronomy-shop/shop.sh status` shows ~31 containers up)
-../astronomy-shop/shop.sh start
-docker compose up -d                                  # ops-mcp, payment-lb, postgres, redis
-
-# 2. TrueForge (keep open)
-./scripts/start-trueforge.sh
-
-# 3. NightShift with real agents (keep open)
-STAGE_RUNNER=trueforge ./.venv/bin/uvicorn control.app:app --port 8090
+../astronomy-shop/shop.sh status          # ~31 containers; if not: ../astronomy-shop/shop.sh start
+docker compose up -d                      # ops-mcp, payment-lb, postgres, redis
+./scripts/nightshift.sh start             # TrueForge + NightShift, restarted automatically if they crash
+./scripts/nightshift.sh status
 ```
 
 Check before you start:
@@ -65,7 +60,7 @@ Other ideas: `src/checkout` (Go) and `src/cart` (C#) also work, but the sandbox 
 
 | What | Where |
 |---|---|
-| Whole team live (agents, supervisor decisions, tool calls, evidence) | http://localhost:8090 |
+| The board: every agent as a strip, the one working pulled out; click a strip to see its answer, evidence and every tool call | http://localhost:8090 |
 | Each agent's full conversation and tool calls | http://localhost:8790 → Sessions |
 | Ticket, plan, approvals | Jira project SRE: https://aryanmatrixx.atlassian.net/jira/software/projects/SRE/boards |
 | Branch and pull request | https://github.com/aryan-2255/opentelemetry-demo/pulls |
