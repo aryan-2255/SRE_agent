@@ -15,15 +15,18 @@ services:
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
       DB_ADMIN_USER: postgres
       DB_ADMIN_PASSWORD: ${SHOP_DB_ADMIN_PASSWORD}
+      SHOP_DB_RO_PASSWORD: ${SHOP_DB_RO_PASSWORD:-}
+      # read-only view of NightShift's incident history (search_incidents, get_incident_evidence)
+      NIGHTSHIFT_DB_URL: postgresql://nightshift_reader:${NIGHTSHIFT_DB_RO_PASSWORD:-unset}@nightshift-postgres:5432/nightshift
     volumes:
       - ./systems:/app/systems:ro
       - /var/run/docker.sock:/var/run/docker.sock
-      # the whole repo at the same absolute path as on the host: compose bind mounts resolve correctly
-      # and git works from the shop folder whether the shop is its own repo or part of this one
-      - ${REPO_ROOT}:${REPO_ROOT}
+      # only the shop (its own git repo), at the same absolute path as on the host so compose bind mounts
+      # resolve. NightShift's .env and TrueForge data stay outside the container.
+      - ${SHOP_PATH}:${SHOP_PATH}
     ports:
       - "127.0.0.1:8000:8000"
-    networks: [shop]
+    networks: [shop, default]
     restart: unless-stopped
 
   payment-lb:

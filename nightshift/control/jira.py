@@ -12,7 +12,7 @@ log = logging.getLogger("jira")
 
 
 def enabled() -> bool:
-    return all(settings.env(k) for k in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"))
+    return not settings.JIRA_DRY_RUN and all(settings.env(k) for k in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"))
 
 
 def _client() -> httpx.Client:
@@ -32,6 +32,9 @@ def browse_url(key: str) -> str:
 
 
 def create_ticket(incident_id: str, title: str, body: str) -> str | None:
+    if settings.JIRA_DRY_RUN:
+        log.info("[jira dry-run] ticket for %s: %s", incident_id, title)
+        return None
     if not enabled():
         return None
     with _client() as c:
@@ -47,6 +50,9 @@ def create_ticket(incident_id: str, title: str, body: str) -> str | None:
 
 
 def comment(key: str | None, text: str) -> None:
+    if settings.JIRA_DRY_RUN:
+        log.info("[jira dry-run] comment on %s: %s", key, text[:200])
+        return
     if not (enabled() and key):
         return
     with _client() as c:

@@ -95,12 +95,17 @@ def server_tools(name):
 
 def build_manifest(spec, small, strong, servers, skills):
     m = json.loads(json.dumps(spec["manifest"]).replace('"$SMALL"', json.dumps(small)).replace('"$STRONG"', json.dumps(strong)))
+    # per-agent model, e.g. NS_MODEL_NS_CODER=bedrock/kimi-k3 (the strongest coding model where code quality matters)
+    override = os.environ.get("NS_MODEL_" + spec["name"].upper().replace("-", "_"))
+    if override:
+        m["model"]["name"] = override
     if not REASONING.get(m["model"]["name"], False):
         m["model"].get("params", {}).pop("reasoning_effort", None)  # this model has no reasoning-effort setting
-    kept, notes = [], []
+    kept, notes, unavailable = [], [], []
     for srv in m.get("mcp_servers", []):
         if srv["name"] not in servers:
             notes.append(f"{srv['name']} not configured")
+            unavailable += [t for t in srv.get("enable_tools", []) if t != "@all"] or [srv["name"]]
             continue
         tools = servers[srv["name"]]
         if tools is not None and srv.get("enable_tools") != ["@all"]:
@@ -109,6 +114,7 @@ def build_manifest(spec, small, strong, servers, skills):
             missing = [t for t in wanted if t not in tools]
             if missing:
                 notes.append(f"{srv['name']} has no {missing}")
+                unavailable += missing
             if not srv["enable_tools"]:
                 notes.append(f"{srv['name']}: none of its tools matched, detached")
                 continue
@@ -118,6 +124,10 @@ def build_manifest(spec, small, strong, servers, skills):
     for srv in kept:
         srv["preload"] = True  # small tool sets: load schemas up front so every model sees them without searching
     m["mcp_servers"] = kept
+    # the instructions are written for the full setup: say plainly what is missing here, so no calls are wasted looking
+    m["instructions"] += ("\n\nUse only the tools you have been given; do not search for other servers or tools."
+                          + (f" Not available in this deployment (ignore any mention of them): {', '.join(sorted(set(unavailable)))}."
+                             if unavailable else ""))
     # Some providers stop calling tools when the output format is forced, so the schema goes into the
     # instructions instead; the orchestrator validates the JSON and retries once if it is invalid.
     rf = m.pop("response_format", None)

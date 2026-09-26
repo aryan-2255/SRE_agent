@@ -11,7 +11,7 @@ from mcp.types import ToolAnnotations
 from starlette.responses import JSONResponse
 
 from . import config
-from .adapters.extras import FlagdFlags, ReadOnlySQL, SyntheticUser, notify_slack
+from .adapters.extras import FlagdFlags, IncidentHistory, ReadOnlySQL, SyntheticUser, notify_slack
 from .adapters.logs_opensearch import OpenSearchLogs
 from .adapters.metrics_prometheus import PrometheusMetrics
 from .adapters.runtime_compose import DockerComposeRuntime
@@ -29,7 +29,8 @@ runtime = DockerComposeRuntime(config.shop_path(), SYSTEM["runtime"])
 flags = FlagdFlags(config.shop_path() / SYSTEM["flags"]["file"], config.shop_path() / ".nightshift" / "flag-backups")
 synthetic = SyntheticUser(SYSTEM["shop_url"])
 sql = ReadOnlySQL(config.env("DB_HOST", "astronomy-db"), int(config.env("DB_PORT", "5432")), config.env("DB_NAME", "astronomy_db"),
-                  config.env("DB_ADMIN_USER", "postgres"), config.env("DB_ADMIN_PASSWORD", ""))
+                  config.env("DB_ADMIN_USER", "postgres"), config.env("DB_ADMIN_PASSWORD", ""), config.env("SHOP_DB_RO_PASSWORD", ""))
+history = IncidentHistory(config.env("NIGHTSHIFT_DB_URL", ""))
 
 READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False)
 WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False)
@@ -80,15 +81,26 @@ def list_services() -> str:
 
 @mcp.tool(annotations=READ)
 @safe
-def get_error_rates(window: str = "2m") -> str:
-    """Requests per second, error percentage and p95 latency for every service over a window like '2m'.
-    Each watched service also shows its error threshold from the onboarding file."""
+def get_error_rates(window: str = "2m", services: str = "") -> str:
+    """Requests per second, error percentage, failed requests and p95 latency over a window like '1m' or '2m'.
+    services: comma-separated names (e.g. 'payment,checkout') to keep the answer small. Default: the watched
+    services, plus any other service with errors. Each watched service also shows its error threshold."""
     rates = metrics.error_rates(window)
-    for name, svc in SYSTEM["services"].items():
-        if name in rates:
-            rates[name]["threshold_error_pct"] = svc.get("slo", {}).get("max_error_pct")
-            rates[name]["over_threshold"] = rates[name]["error_pct"] > (rates[name]["threshold_error_pct"] or 100)
-    return rates
+    wanted = {x.strip() for x in services.split(",") if x.strip()}
+    seconds = int(window[:-1]) * (60 if window.endswith("m") else 1) if window[:-1].isdigit() else 120
+    out = {}
+    for name, r in rates.items():
+        svc = SYSTEM["services"].get(name)
+        if wanted and name not in wanted:
+            continue
+        if not wanted and not svc and not r.get("error_pct"):
+            continue
+        r["failed_requests"] = round(r["rps"] * r["error_pct"] / 100 * seconds, 1)
+        if svc:
+            r["threshold_error_pct"] = svc.get("slo", {}).get("max_error_pct")
+            r["over_threshold"] = r["error_pct"] > (r["threshold_error_pct"] or 100)
+        out[name] = r
+    return out or {"note": f"no traffic in the last {window} for {sorted(wanted) or 'any service'}"}
 
 
 @mcp.tool(annotations=READ)
@@ -116,7 +128,8 @@ def query_logs(service: str, minutes: int = 15, contains: str = "", level: str =
 @safe
 def get_traces(service: str, minutes: int = 15, errors_only: bool = True, limit: int = 5,
                real_users_only: bool = False) -> str:
-    """Recent request traces through a service: root call, duration, and the first failing step with its error.
+    """Recent request traces through a service: root call, duration, the first failing step, and origin_step:
+    the deepest failing step, where the error started (its caller failed only because of it).
     real_users_only skips load-generator traffic."""
     return traces.search(service, minutes, errors_only, limit, real_users_only)
 
@@ -158,6 +171,22 @@ def synthetic_check(flow: str = "add_to_cart") -> str:
     """Use the live shop like a real customer. flow='add_to_cart' adds 5 items and checks the cart really holds 5;
     flow='checkout' also places an order. Returns pass/fail and the failing step."""
     return synthetic.run(flow)
+
+
+@mcp.tool(annotations=READ)
+@safe
+def search_incidents(text: str, limit: int = 5) -> str:
+    """Past incidents of this system that match the words in `text` (service, error message, cause):
+    what the root cause was, what fixed it, and the postmortem summary. Use it early in a diagnosis."""
+    return history.search(text, limit)
+
+
+@mcp.tool(annotations=READ)
+@safe
+def get_incident_evidence(incident_id: str, stage: str = "", tool: str = "", limit: int = 8) -> str:
+    """The raw tool outputs earlier agents saw in this incident (newest first), for when a summary is not enough.
+    Filter by stage (e.g. 'diagnosis') or tool (e.g. 'query_logs')."""
+    return history.evidence(incident_id, stage, tool, limit)
 
 
 # ---------------- change (paused for human approval) ----------------

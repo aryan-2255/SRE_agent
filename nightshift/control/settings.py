@@ -34,6 +34,12 @@ INCIDENT_BUDGET_USD = float(env("INCIDENT_BUDGET_USD", "5.0"))
 STAGE_RUNNER = env("STAGE_RUNNER", "trueforge")  # or "fake"
 SUPERVISOR = env("SUPERVISOR", "on").lower() != "off"  # AI chooses the next step within guardrails
 USD_TO_INR = float(env("USD_TO_INR", "88"))
+APPROVAL_REMIND_MIN = float(env("APPROVAL_REMIND_MIN", "5"))     # remind on Jira/dashboard after this long
+APPROVAL_TIMEOUT_MIN = float(env("APPROVAL_TIMEOUT_MIN", "30"))  # then the approval expires as denied
+VERIFY_SETTLE_S = int(env("VERIFY_SETTLE_S", "60"))              # wait this long after a change before verifying it
+# Dashboard sign-in: "name:token,name2:token2". Empty = only this machine (localhost) may decide approvals.
+DASHBOARD_USERS = {t: n for n, t in (x.split(":", 1) for x in filter(None, env("DASHBOARD_USERS").split(",")))}
+JIRA_DRY_RUN = env("JIRA_DRY_RUN", "false").lower() == "true"    # tests and demos: log Jira calls instead of making them
 
 # USD per 1M tokens (input, output), used when the provider reports no cost (custom providers such as Bedrock).
 # Kimi K3 from the Bedrock model card (global); MiniMax M2.5 from MiniMax's list price. Override with MODEL_PRICES.

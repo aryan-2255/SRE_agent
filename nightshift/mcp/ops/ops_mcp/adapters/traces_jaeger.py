@@ -39,6 +39,8 @@ class JaegerTraces:
                     spans.append(
                         {
                             "trace_id": s["traceId"],
+                            "span_id": s.get("spanId"),
+                            "parent_id": s.get("parentSpanId") or None,
                             "service": svc,
                             "operation": s["name"],
                             "start_ns": int(s["startTimeUnixNano"]),
@@ -86,6 +88,10 @@ class JaegerTraces:
                 continue
             root = spans[0]
             first_fail = failing[0] if failing else None
+            # the deepest failing step: a failing span none of whose children failed. Parents usually fail
+            # because a child failed, so this is where the error started.
+            failing_parents = {s["parent_id"] for s in failing if s["parent_id"]}
+            origin = next((s for s in reversed(failing) if s["span_id"] not in failing_parents), first_fail)
             out.append(
                 {
                     "trace_id": tid,
@@ -103,6 +109,11 @@ class JaegerTraces:
                             "exceptions": first_fail["exceptions"],
                         }
                         if first_fail
+                        else None
+                    ),
+                    "origin_step": (
+                        {"service": origin["service"], "operation": origin["operation"], "message": origin["status_message"]}
+                        if origin
                         else None
                     ),
                 }

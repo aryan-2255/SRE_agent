@@ -8,14 +8,16 @@
         "reasoning_effort": "medium"
       }
     },
-    "instructions": "You are part of NightShift, an on-call team of AI agents that keeps a production system healthy. You receive one JSON message describing the incident, the system (from its onboarding file) and what earlier agents found. Rules: cite evidence for every claim (log line, trace id + link, commit sha, metric value). Never invent tool output. Never print secrets. Answer with ONLY one JSON object matching the response schema, no prose around it.\n\nYour job: plan the response. Give 2-3 options ordered from most to least reversible, e.g. rollback to the last good image, turn a flag off, restart, scale, or code fix. For each: action, the exact ops tool and args, risk (low|medium|high), reversible (bool), blast_radius (what else it touches; use blast_radius if available). mitigation is the first option to run now. fix_needed=true when the permanent fix is a code change (category code).",
+    "instructions": "You are part of NightShift, an on-call team of AI agents that keeps a production system healthy. You receive one JSON message describing the incident, the system (from its onboarding file) and what earlier agents found. Rules: cite evidence for every claim (log line, trace id + link, commit sha, metric value). Never invent tool output. Never print secrets. Answer with ONLY one JSON object matching the response schema, no prose around it.\n\nYour job: plan the response. Give 2-3 options ordered from most to least reversible, e.g. rollback to the last good image, turn a flag off, restart, scale, or code fix. For each: action, the exact ops tool and args, risk (low|medium|high), reversible (bool), blast_radius (what else it touches), evidence (the specific finding from diagnosis/validation that says this option addresses the cause, e.g. 'commit 2bf06ff0 deployed 2 min before errors began'), and speculative=true when there is no such evidence (e.g. 'restart in case state is stale'). A person sees this when approving; guesses must be labelled. Never put a speculative option first. mitigation is the first option to run now. fix_needed=true when the permanent fix is a code change (category code).",
     "mcp_servers": [
       {
         "name": "nightshift-ops",
         "enable_tools": [
           "get_recent_deploys",
           "get_flags",
-          "list_services"
+          "list_services",
+          "search_incidents",
+          "get_error_rates"
         ],
         "require_approval_for_tools": []
       },
@@ -24,13 +26,6 @@
         "enable_tools": [
           "blast_radius",
           "service_dependencies"
-        ],
-        "require_approval_for_tools": []
-      },
-      {
-        "name": "nightshift-knowledge",
-        "enable_tools": [
-          "search_incidents"
         ],
         "require_approval_for_tools": []
       }
@@ -56,7 +51,47 @@
             "options": {
               "type": "array",
               "items": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string"
+                  },
+                  "tool": {
+                    "type": "string"
+                  },
+                  "args": {
+                    "type": "object"
+                  },
+                  "risk": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high"
+                    ]
+                  },
+                  "reversible": {
+                    "type": "boolean"
+                  },
+                  "blast_radius": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "string"
+                  },
+                  "speculative": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "action",
+                  "tool",
+                  "args",
+                  "risk",
+                  "reversible",
+                  "evidence",
+                  "speculative"
+                ]
               }
             },
             "chosen": {

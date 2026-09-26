@@ -16,9 +16,7 @@
           "pull_request_read",
           "get_file_contents",
           "pull_request_review_write",
-          "create_pending_pull_request_review",
-          "add_comment_to_pending_review",
-          "submit_pending_pull_request_review"
+          "add_issue_comment"
         ],
         "require_approval_for_tools": []
       }

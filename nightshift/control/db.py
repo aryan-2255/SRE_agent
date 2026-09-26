@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import psycopg
+from psycopg import sql
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
@@ -17,6 +18,19 @@ def init() -> None:
     for f in sorted((Path(__file__).parent / "migrations").glob("*.sql")):
         with pool.connection() as c:
             c.execute(f.read_text())
+    _reader_role()
+
+
+def _reader_role() -> None:
+    """A read-only login for the ops server's search_incidents / get_incident_evidence tools."""
+    pw = settings.env("NIGHTSHIFT_DB_RO_PASSWORD")
+    if not pw:
+        return
+    with pool.connection() as c:
+        if not c.execute("select 1 from pg_roles where rolname='nightshift_reader'").fetchone():
+            c.execute("create role nightshift_reader login")
+        c.execute(sql.SQL("alter role nightshift_reader password {}").format(sql.Literal(pw)))
+        c.execute("grant select on incidents, stages, events to nightshift_reader")
 
 
 def _param(p):

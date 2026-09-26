@@ -48,7 +48,8 @@ Leave everything else as the bootstrap set it. `.env` is ignored by git; never c
 ## 4. Start TrueForge and connect it
 
 ```bash
-./scripts/start-trueforge.sh        # keep this terminal open
+./scripts/nightshift.sh start      # TrueForge + NightShift control, restarted automatically if they crash
+./scripts/nightshift.sh status     # or: stop | restart | logs control | logs trueforge
 ```
 
 Open http://localhost:8790 → **Settings**:
@@ -60,7 +61,7 @@ Open http://localhost:8790 → **Settings**:
 | **Connectors → GitHub** | Your own fine-grained token, repository `aryan-2255/opentelemetry-demo` only, permissions Contents RW, Pull requests RW, Actions R, Commit statuses R |
 | **Connectors → Jira** | Connect and log in with Atlassian |
 
-`start-trueforge.sh` sets `OUTBOUND_URL_ALLOWED_HOSTS`, which TrueForge needs to reach NightShift's servers on localhost. Always start it with this script.
+TrueForge is started through `scripts/start-trueforge.sh`, which sets `OUTBOUND_URL_ALLOWED_HOSTS` so TrueForge can reach NightShift's servers on localhost.
 
 ## 5. Load the agents
 
@@ -68,15 +69,16 @@ Open http://localhost:8790 → **Settings**:
 ./.venv/bin/python scripts/setup_trueforge.py
 ```
 
-It registers the `nightshift-ops` server and creates or updates all 13 agents (see `agents/README.md`). Run it again after changing anything in `agents/`.
+It registers the `nightshift-ops` server and creates or updates all 14 agents (see `agents/README.md`). Run it again after changing anything in `agents/`.
 
-## 6. Start NightShift
+## 6. Open NightShift
 
-```bash
-./.venv/bin/uvicorn control.app:app --port 8090
-```
+`scripts/nightshift.sh start` already runs it. Dashboard: http://localhost:8090. The watcher starts immediately; if
+NightShift restarts mid-incident, it continues from the last finished step.
 
-Dashboard: http://localhost:8090. The watcher starts immediately.
+Who may approve: with nothing set, only this machine. To give each person their own sign-in, add to `.env`:
+`DASHBOARD_USERS=aryan:<long random token>,friend:<another token>` and restart. The dashboard asks for the token once,
+and every approval is recorded under that name (Jira approvals use the Jira user).
 
 ## 7. Try an incident
 
@@ -99,6 +101,9 @@ Within about a minute the dashboard shows an incident; the agents diagnose it an
 | `python scripts/mcp_call.py` | List the ops tools; add a tool name and JSON args to call one |
 | `docker compose logs -f ops-mcp` | Ops server logs |
 | `chaos/break.sh <scenario>` / `chaos/fix.sh` | Break the shop on purpose / restore it |
+| `.venv/bin/python -m pytest -q tests` | Guardrail tests (no models needed, under a second) |
+| `.venv/bin/python evals/run.py [scenario…]` | Break the shop in 8 known ways and score detection, cause, fix, cost (set `WATCH_COOLDOWN_S=60`, `JIRA_DRY_RUN=true` first) |
+| `docs/MANUAL-TEST.md` | Step-by-step: plant a bug and watch the agents fix it |
 
 ## Working together
 

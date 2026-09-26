@@ -75,16 +75,42 @@ async def stream(request: Request):
 class Decision(BaseModel):
     decision: str
     reason: str = ""
-    by: str = "dashboard user"
+
+
+LOCAL = {"127.0.0.1", "::1", "localhost"}
+
+
+def who(request: Request) -> str:
+    """Who is deciding. The server decides this, never the request body: a token from DASHBOARD_USERS,
+    or, when no users are configured, anyone on this machine only."""
+    token = request.headers.get("authorization", "").removeprefix("Bearer ").strip() or request.cookies.get("ns_token", "")
+    if settings.DASHBOARD_USERS:
+        name = settings.DASHBOARD_USERS.get(token)
+        if not name:
+            raise HTTPException(401, "Sign in with your NightShift token")
+        return name
+    if request.client and request.client.host in LOCAL:
+        return "local operator"
+    raise HTTPException(401, "Approvals from other machines need DASHBOARD_USERS in .env")
+
+
+@app.get("/api/me")
+def me(request: Request):
+    try:
+        return {"name": who(request), "mode": "users" if settings.DASHBOARD_USERS else "local"}
+    except HTTPException as e:
+        return {"name": None, "mode": "users" if settings.DASHBOARD_USERS else "local", "error": e.detail}
 
 
 @app.post("/api/approvals/{approval_id}")
-def decide(approval_id: int, body: Decision):
-    row = approvals.decide(approval_id, body.decision, "dashboard", body.by, body.reason)
+def decide(approval_id: int, body: Decision, request: Request):
+    by = who(request)
+    row = approvals.decide(approval_id, body.decision, "dashboard", by, body.reason)
     if not row:
         raise HTTPException(409, "Already decided or not found")
     inc = db.one("select jira_key from incidents where id=%s", row["incident_id"])
-    jira.comment(inc and inc["jira_key"], f"NightShift: {row['tool']} {row['status']} from the dashboard.")
+    jira.comment(inc and inc["jira_key"], f"NightShift: {row['tool']} {row['status']} by {by} from the dashboard."
+                 + (f" Reason: {body.reason}" if body.reason else ""))
     return _json(row)
 
 
@@ -138,7 +164,8 @@ async def connections():
 
 
 @app.post("/api/demo/{scenario}")
-def demo(scenario: str):
+def demo(scenario: str, request: Request):
+    who(request)
     if not settings.DEMO_MODE:
         raise HTTPException(403, "Demo endpoints are off")
     script = settings.ROOT / "chaos" / "break.sh"
@@ -149,8 +176,9 @@ def demo(scenario: str):
 
 
 @app.post("/api/test-incident")
-def test_incident(service: str = "payment"):
+def test_incident(request: Request, service: str = "payment"):
     """Open an incident by hand (for testing the pipeline without breaking anything)."""
+    who(request)
     inc = watcher.open_incident(settings.system(), service, f"Manual test incident on {service}", {"type": "manual"})
     return {"incident": inc}
 

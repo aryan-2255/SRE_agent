@@ -33,7 +33,7 @@ cd truforge_hackthon/nightshift && ./scripts/bootstrap.sh
 | `mcp/ops/` | MCP server with 19 tools: metrics, logs, traces, deploy history, flags, read-only SQL, synthetic customer, rollback, deploy, canary, restart, scale, notify |
 | `control/` | Watcher, orchestrator, Jira approval bridge, incident state (Postgres), API and live stream |
 | `control/web/` | Dashboard |
-| `agents/` | 13 TrueForge agent specs |
+| `agents/` | 14 TrueForge agent specs (table: agents/README.md) |
 | `skills/` | Skills the agents load (sandbox toolchains, runbooks, postmortem template) |
 | `systems/` | Onboarding file per watched system |
 | `chaos/` | Scripts that break and restore the shop for demos |

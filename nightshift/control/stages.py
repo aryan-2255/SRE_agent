@@ -67,6 +67,20 @@ def _parse_json(text: str) -> dict:
     return json.loads(text[start:end + 1])
 
 
+def unwrap_tool(name: str, args):
+    """TrueForge may call a tool through its generic call_tool wrapper: {"tool_name": "rollback", "input": {...}}.
+    People must see (and approve) the real tool, so unwrap it everywhere."""
+    if isinstance(args, str):
+        try:
+            args = json.loads(args or "{}")
+        except json.JSONDecodeError:
+            return name, {"raw": args}
+    if name == "call_tool" and isinstance(args, dict) and args.get("tool_name"):
+        inner = args.get("input", args.get("arguments", {}))
+        return args["tool_name"], inner if isinstance(inner, dict) else {"input": inner}
+    return name, args if isinstance(args, dict) else {"value": args}
+
+
 def _short(v, n=600):
     s = v if isinstance(v, str) else json.dumps(v, default=str)
     return s if len(s) <= n else s[:n] + "…"
@@ -131,16 +145,16 @@ class TrueForgeRunner:
                 elif kind == "tool.response":
                     d = _dump(ev)
                     call_id = d.get("tool_call_id", "")
-                    name = tool_names.get(call_id, "tool")
+                    raw_args = _dump(tool_calls_by_id[call_id]).get("function", {}).get("arguments", "") if call_id in tool_calls_by_id else ""
+                    name, args = unwrap_tool(tool_names.get(call_id, "tool"), raw_args)
                     if call_id not in reported:
                         reported.add(call_id)
-                        args = _dump(tool_calls_by_id[call_id]).get("function", {}).get("arguments", "") if call_id in tool_calls_by_id else ""
                         bus.publish("tool.call", f"Called {name}", incident_id, stage, {"tool": name, "args": _short(args, 800)})
                     text = _tool_text(d.get("content"))
-                    full_args = _dump(tool_calls_by_id[call_id]).get("function", {}).get("arguments", "") if call_id in tool_calls_by_id else ""
-                    calls.append({"tool": name, "args": _short(full_args, 500), "result": _short(text, 2000)})
+                    # full text kept in memory so the orchestrator can check quoted evidence against it
+                    calls.append({"tool": name, "args": _short(args, 500), "result": _short(text, 30000)})
                     bus.publish("tool.result", f"{name} returned", incident_id, stage,
-                                {"tool": name, "result": _short(text, 1500)})
+                                {"tool": name, "args": _short(args, 300), "result": _short(text, 4000)})
                     if name in EVIDENCE_SOURCES:
                         try:
                             items = json.loads(text)
@@ -177,30 +191,27 @@ class TrueForgeRunner:
                     src = index.get(ref.get("source_event_id"))
                     tc = next((t for t in (getattr(src, "tool_calls", None) or []) if t.id == ref["id"]), None)
                     d = _dump(tc) if tc else {}
-                    tool = (d.get("tool_info") or {}).get("name") or d.get("function", {}).get("name", "?")
-                    try:
-                        args = json.loads(d.get("function", {}).get("arguments") or "{}")
-                    except json.JSONDecodeError:
-                        args = {"raw": d.get("function", {}).get("arguments")}
+                    tool, args = unwrap_tool((d.get("tool_info") or {}).get("name") or d.get("function", {}).get("name", "?"),
+                                             d.get("function", {}).get("arguments") or "{}")
                     thread_id = action.get("thread_id", "main")
                     if action.get("type") == "tool.response_required":
                         # ask_user_question: route it as an approval with the question in args
                         a = approvals.request(incident_id, stage, tool, args, thread_id, ref["id"], sid)
-                        decided = approvals.wait(a["id"])
+                        decided = approvals.wait_or_expire(a["id"], None)
                         turn_input.append({"type": "user.tool_response", "thread_id": thread_id, "tool_call_id": ref["id"],
                                            "content": decided.get("reason") or decided["status"]})
                         continue
-                    a = approvals.request(incident_id, stage, tool, args, thread_id, ref["id"], sid)
+                    context = approvals.context_for(incident_id, stage, tool, args, payload)
+                    a = approvals.request(incident_id, stage, tool, args, thread_id, ref["id"], sid, context)
                     inc = db.one("select jira_key from incidents where id=%s", incident_id)
-                    jira.comment(inc and inc["jira_key"],
-                                 f"Approval needed: {tool}\nArguments: {json.dumps(args)}\n"
-                                 f"Undo: {approvals.UNDO_HINTS.get(tool, 'see NightShift dashboard')}\n"
-                                 "Reply /approve or /deny <reason>.")
-                    if tool in autonomy_auto:
+                    auto = tool in autonomy_auto
+                    if not auto:
+                        jira.comment(inc and inc["jira_key"], approvals.describe(tool, args, context) + "\nReply /approve or /deny <reason>.")
+                    if auto:
                         approvals.decide(a["id"], "approve", "policy", "autonomy policy")
                     db.q("update stages set status='waiting_approval' where incident_id=%s and name=%s and status='running'",
                          incident_id, stage)
-                    decided = approvals.wait(a["id"])
+                    decided = approvals.wait_or_expire(a["id"], inc and inc["jira_key"])
                     db.q("update stages set status='running' where incident_id=%s and name=%s and status='waiting_approval'",
                          incident_id, stage)
                     approval = {"status": "allow"} if decided["status"] == "approved" else \

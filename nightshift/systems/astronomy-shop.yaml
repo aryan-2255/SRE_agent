@@ -19,14 +19,44 @@ telemetry:
 flags: { type: flagd, file: src/flagd/demo.flagd.json }
 shop_url: http://frontend-proxy:8080
 services:
-  payment:        { language: javascript, path: src/payment,        test_cmd: "npm ci && node --test", slo: { max_error_pct: 5, p95_ms: 800 } }
-  frontend:       { language: typescript, path: src/frontend,       test_cmd: "npm ci && npm test",   slo: { max_error_pct: 5, p95_ms: 1500 }, depends_on: [cart, checkout, product-catalog, recommendation] }
-  recommendation: { language: python,     path: src/recommendation, test_cmd: "pip install -r requirements.txt && pytest", slo: { max_error_pct: 5 }, depends_on: [product-catalog] }
-  checkout:       { language: go,         path: src/checkout,       slo: { max_error_pct: 5 }, depends_on: [payment, cart, product-catalog] }
-  cart:           { language: csharp,     path: src/cart,           slo: { max_error_pct: 5 } }
-  product-catalog: { language: go,        path: src/product-catalog, slo: { max_error_pct: 5 } }
-  agent:          { language: python,     path: src/agent,          slo: { max_error_pct: 35 }, depends_on: [product-catalog] }   # baseline ~17% errors
-watch: { window: 2m, for: 2m, demo_for: 30s, min_rps: 0.01, poll_seconds: 5 }
+  # depends_on: who this service calls. When a service and one of its dependencies fail together, the incident opens
+  # on the dependency (the likelier root cause). Services without an slo are operated (restart, rollback) but not watched.
+  payment:         { language: javascript, path: src/payment,         test_cmd: "npm ci && node --test", slo: { max_error_pct: 5, p95_ms: 800 } }
+  frontend:        { language: typescript, path: src/frontend,        test_cmd: "npm ci && npm test",   slo: { max_error_pct: 5, p95_ms: 1500 }, depends_on: [cart, checkout, product-catalog, recommendation, ad, currency, shipping] }
+  checkout:        { language: go,         path: src/checkout,        slo: { max_error_pct: 5 }, depends_on: [payment, cart, product-catalog, shipping, email, currency, kafka] }
+  cart:            { language: csharp,     path: src/cart,            slo: { max_error_pct: 5 }, depends_on: [valkey-cart] }
+  product-catalog: { language: go,         path: src/product-catalog, slo: { max_error_pct: 5 } }
+  recommendation:  { language: python,     path: src/recommendation,  test_cmd: "pip install -r requirements.txt && pytest", slo: { max_error_pct: 5 }, depends_on: [product-catalog] }
+  shipping:        { language: rust,       path: src/shipping,        slo: { max_error_pct: 5 }, depends_on: [quote] }
+  quote:           { language: php,        path: src/quote,           slo: { max_error_pct: 5 } }
+  currency:        { language: cpp,        path: src/currency,        slo: { max_error_pct: 5 } }
+  email:           { language: ruby,       path: src/email,           slo: { max_error_pct: 5 } }
+  ad:              { language: java,       path: src/ad,              slo: { max_error_pct: 5 } }
+  accounting:      { language: csharp,     path: src/accounting,      slo: { max_error_pct: 5 }, depends_on: [kafka] }
+  fraud-detection: { language: kotlin,     path: src/fraud-detection, slo: { max_error_pct: 5 }, depends_on: [kafka] }
+  agent:           { language: python,     path: src/agent,           slo: { max_error_pct: 35 }, depends_on: [product-catalog] }   # baseline ~17% errors
+  # infrastructure: no request metrics of their own, but agents may restart them
+  kafka:           { language: infra, path: src/kafka }
+  valkey-cart:     { language: infra, path: src/valkey-cart }
+  otel-collector:  { language: infra, path: src/otel-collector }
+  prometheus:      { language: infra, path: src/prometheus }
+# Code shared by several services: validator and coder check these out too (protobuf contracts, shared libraries).
+shared_paths: [pb, src/shared]
+# Signals that error percentages miss. Each PromQL returns one number; above the limit for the hold time opens an incident.
+signals:
+  - name: fraud-detection queue lag
+    service: fraud-detection
+    promql: max(kafka_consumer_records_lag_max{service_name="fraud-detection"})
+    above: 100
+    explain: orders waiting unread in Kafka for fraud-detection
+  - name: accounting stopped consuming orders
+    service: accounting
+    promql: (sum(rate(traces_span_metrics_calls_total{service_name="checkout",span_name="publish orders"}[2m])) > 0.005) * 0 + on() ((sum(rate(traces_span_metrics_calls_total{service_name="accounting",span_kind="SPAN_KIND_CONSUMER"}[2m])) or on() vector(0)) == bool 0)
+    above: 0.5
+    explain: checkout is publishing orders but accounting has processed none in 2 minutes
+# window: metrics window; for / demo_for: how long a problem must last. A problem needs min_failures failed requests in
+# the window (or min_rps of traffic) to count; with less traffic the timer pauses instead of resetting.
+watch: { window: 2m, for: 2m, demo_for: 30s, min_rps: 0.05, min_failures: 3, poll_seconds: 5, blind_after_s: 60 }
 autonomy:
   auto: [notify]               # internal team updates need no approval. Night mode adds: rollback, restart_service
   ask: [rollback, restart_service, scale_service, set_flag, deploy, deploy_canary, promote_canary, create_pull_request, merge_pull_request]

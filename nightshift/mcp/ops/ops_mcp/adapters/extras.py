@@ -1,6 +1,7 @@
 """Smaller adapters: feature flags (flagd), read-only SQL, synthetic user, Slack."""
 import json
 import re
+import secrets
 import shutil
 import time
 import uuid
@@ -43,18 +44,21 @@ class ReadOnlySQL:
 
     _WRITE = re.compile(r"\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|call|do)\b", re.I)
 
-    def __init__(self, host: str, port: int, db: str, admin_user: str, admin_password: str):
+    def __init__(self, host: str, port: int, db: str, admin_user: str, admin_password: str, ro_password: str = ""):
         self.host, self.port, self.db = host, port, db
         self.admin = (admin_user, admin_password)
-        self.role, self.password = "nightshift_ro", "nightshift_ro"
+        # no fixed password in code: from .env, or a fresh random one each start (ensure_role sets it)
+        self.role, self.password = "nightshift_ro", ro_password or secrets.token_hex(16)
 
     def ensure_role(self) -> None:
         import psycopg
+        from psycopg import sql
 
         with psycopg.connect(host=self.host, port=self.port, dbname=self.db, user=self.admin[0],
                              password=self.admin[1], autocommit=True, connect_timeout=5) as c:
             if not c.execute("select 1 from pg_roles where rolname=%s", (self.role,)).fetchone():
-                c.execute(f"create role {self.role} login password '{self.password}'")
+                c.execute(f"create role {self.role} login")
+            c.execute(sql.SQL("alter role {} password {}").format(sql.Identifier(self.role), sql.Literal(self.password)))
             c.execute(f"alter role {self.role} set default_transaction_read_only = on")
             c.execute(f"grant pg_read_all_data to {self.role}")
 
@@ -105,9 +109,19 @@ class SyntheticUser:
                     raise StopIteration
                 return r
 
+            def money(m):
+                return round((m or {}).get("units", 0) + (m or {}).get("nanos", 0) / 1e9, 2)
+
+            def check(name, ok, detail):
+                steps.append({"step": name, "ok": bool(ok), "status": None, "ms": 0, "detail": "" if ok else detail})
+                if not ok:
+                    raise StopIteration
+
             try:
                 products = step("list products", lambda: c.get("/api/products", params={"currencyCode": "USD"})).json()
-                pid = products[0]["id"]
+                # a price with cents exercises the money code paths that whole-dollar prices skip
+                product = next((p for p in products if (p.get("priceUsd") or {}).get("nanos")), products[0])
+                pid, price = product["id"], money(product.get("priceUsd"))
                 step(f"add {quantity} × {pid} to cart", lambda: c.post(
                     "/api/cart", params={"currencyCode": "USD"},
                     json={"item": {"productId": pid, "quantity": quantity}, "userId": user}))
@@ -119,13 +133,65 @@ class SyntheticUser:
                     raise StopIteration
                 if flow == "checkout":
                     order = step("place order", lambda: c.post("/api/checkout", params={"currencyCode": "USD"},
-                                                              json={**self.TEST_BUYER, "userId": user}))
-                    steps[-1]["detail"] = f"order {order.json().get('orderId', '?')}"
+                                                              json={**self.TEST_BUYER, "userId": user})).json()
+                    steps[-1]["detail"] = f"order {order.get('orderId', '?')}"
+                    # a 200 is not enough: the order must say what we bought, at the catalog price
+                    lines = [i for i in order.get("items", []) if (i.get("item") or {}).get("productId") == pid]
+                    qty = sum((i.get("item") or {}).get("quantity", 0) for i in lines)
+                    check(f"order holds {quantity} × {pid}", qty == quantity, f"order has {qty}")
+                    cost = money(lines[0].get("cost")) if lines else None
+                    check(f"charged the catalog price {price}", cost == price, f"order line costs {cost}")
+                    ship = money(order.get("shippingCost"))
+                    check("shipping cost is sane", 0 < ship < 1000, f"shipping cost {ship}")
+                    check("order has a tracking id", bool(order.get("shippingTrackingId")), "no shipping tracking id")
             except StopIteration:
                 pass
         passed = all(s["ok"] for s in steps)
         failed = next((s for s in steps if not s["ok"]), None)
         return {"flow": flow, "passed": passed, "failed_step": failed, "steps": steps}
+
+
+class IncidentHistory:
+    """Read-only view of NightShift's own incident store: past incidents and the raw evidence of the current one."""
+
+    def __init__(self, dsn: str):
+        self.dsn = dsn
+
+    def _q(self, query: str, *params) -> list[dict]:
+        import psycopg
+        from psycopg.rows import dict_row
+
+        if not self.dsn:
+            raise RuntimeError("Incident history is not configured (NIGHTSHIFT_DB_URL).")
+        with psycopg.connect(self.dsn, row_factory=dict_row, connect_timeout=5) as c:
+            c.execute("set statement_timeout = '5s'")
+            return c.execute(query, params).fetchall()
+
+    def search(self, text: str, limit: int = 5) -> list[dict]:
+        rows = self._q(
+            "select i.id, i.service, i.status, i.category, i.severity, i.summary, i.opened_at, i.pr_url, "
+            "(select output->>'root_cause' from stages where incident_id=i.id and name='diagnosis' and status='done' order by id desc limit 1) root_cause, "
+            "(select output->>'suspect_commit' from stages where incident_id=i.id and name='diagnosis' and status='done' order by id desc limit 1) suspect_commit, "
+            "(select output->>'summary' from stages where incident_id=i.id and name='mitigation' and status='done' order by id desc limit 1) mitigation, "
+            "(select output->>'summary' from stages where incident_id=i.id and name='postmortem' and status='done' order by id desc limit 1) postmortem "
+            "from incidents i order by opened_at desc limit 300")
+        words = [w for w in re.findall(r"[a-z0-9_.-]{3,}", text.lower())]
+        scored = []
+        for r in rows:
+            hay = " ".join(str(v) for v in r.values() if v).lower()
+            score = sum(hay.count(w) for w in words)
+            if score:
+                scored.append((score, r))
+        scored.sort(key=lambda x: -x[0])
+        return [{k: (str(v) if v is not None else None) for k, v in r.items()} for _, r in scored[: max(1, min(int(limit), 10))]] \
+            or [{"note": "no similar past incidents"}]
+
+    def evidence(self, incident_id: str, stage: str = "", tool: str = "", limit: int = 8) -> list[dict]:
+        rows = self._q(
+            "select id, ts, stage, data->>'tool' tool, data->>'result' result from events "
+            "where incident_id=%s and kind='tool.result' and (%s='' or stage=%s) and (%s='' or data->>'tool'=%s) "
+            "order by id desc limit %s", incident_id, stage, stage, tool, tool, max(1, min(int(limit), 20)))
+        return [{**r, "ts": str(r["ts"])} for r in rows] or [{"note": "no matching tool outputs"}]
 
 
 def notify_slack(webhook: str, text: str) -> str:

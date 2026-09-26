@@ -1,0 +1,30 @@
+# Eval scenarios: break the shop one way, then check what NightShift did.
+# break: a feature flag (the shop's built-in failure switches) or a chaos/break.sh scenario.
+# expect.service: where the incident should open (any of the list). expect.cause: words the diagnosis should contain
+# (any). expect.fix: the first change NightShift should ask to make. expect.incident=false: nothing should open.
+- id: payment-failure
+  break: { flag: paymentFailure, variant: "50%" }
+  expect: { service: [payment], cause: [paymentFailure, flag], fix: { tool: set_flag, args: { flag: paymentFailure, variant: "off" } } }
+- id: payment-unreachable
+  break: { flag: paymentUnreachable, variant: "on" }
+  expect: { service: [payment, checkout], cause: [paymentUnreachable, unreachable, flag], fix: { tool: set_flag, args: { flag: paymentUnreachable, variant: "off" } } }
+- id: cart-failure
+  break: { flag: cartFailure, variant: "50%" }
+  expect: { service: [cart], cause: [cartFailure, flag], fix: { tool: set_flag, args: { flag: cartFailure, variant: "off" } } }
+- id: product-catalog-failure
+  break: { flag: productCatalogFailure, variant: "on" }
+  expect: { service: [product-catalog], cause: [productCatalogFailure, flag], fix: { tool: set_flag, args: { flag: productCatalogFailure, variant: "off" } } }
+- id: ad-failure
+  break: { flag: adFailure, variant: "on" }
+  expect: { service: [ad], cause: [adFailure, flag], fix: { tool: set_flag, args: { flag: adFailure, variant: "off" } } }
+- id: kafka-queue-problems
+  break: { flag: kafkaQueueProblems, variant: "on" }
+  expect: { service: [fraud-detection, accounting, kafka, checkout], cause: [kafkaQueueProblems, kafka, lag], fix: { tool: set_flag, args: { flag: kafkaQueueProblems, variant: "off" } } }
+- id: payment-bad-deploy
+  break: { chaos: payment-bug }
+  expect: { service: [payment], cause: [validateAmount, commit, nanos], fix: { tool: rollback, args: { service: payment } } }
+  timeout_s: 900
+- id: one-bad-request
+  break: { chaos: blip }
+  expect: { incident: false }
+  timeout_s: 150

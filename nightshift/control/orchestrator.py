@@ -1,9 +1,12 @@
 """The incident pipeline. Each stage is one TrueForge agent; this file decides the order, the loops and when to stop."""
 import json
 import logging
+import re
 import threading
+import time
 import traceback
 
+import httpx
 import redis
 
 from . import approvals, bus, db, jira, settings
@@ -38,6 +41,46 @@ def unbacked_claim(stage: str, output: dict, tool_calls: list[dict]) -> str | No
     return None
 
 
+def _norm(text: str) -> str:
+    return re.sub(r"[^a-z0-9.%:/_-]+", " ", str(text).lower()).strip()
+
+
+def check_evidence(items: list, corpus: str) -> list:
+    """Mark each evidence item verified=True only if what it quotes appears in a real tool output of this incident.
+    Models sometimes paraphrase or invent 'log lines'; the supervisor and the dashboard see which ones are backed."""
+    out = []
+    for e in items or []:
+        if not isinstance(e, dict):
+            e = {"text": str(e)}
+        text = str(e.get("text") or e.get("detail") or e.get("quote") or "")
+        # trace ids and commit shas (hex with at least one letter, so plain numbers do not count)
+        ids = [i for i in re.findall(r"\b[0-9a-f]{7,40}\b", text + " " + str(e.get("link", ""))) if re.search("[a-f]", i)]
+        # the text itself (pieces between "..."), or the literals it quotes: "value": "off", "Up 2 hours"
+        fragments = [f for f in (_norm(x) for x in re.split(r"\.\.\.|…|\n", text)) if len(f) >= 16]
+        quoted = [q for q in (_norm(x) for x in re.findall(r'"([^"]{6,})"', text)) if len(q) >= 6]
+        whole = bool(fragments) and all(any(f[i:i + 24] in corpus for i in range(0, max(1, len(f) - 23), 4)) for f in fragments)
+        literal = bool(quoted) and sum(q in corpus for q in quoted) >= max(1, len(quoted) // 2)
+        ok = whole or literal or (bool(ids) and all(i in corpus for i in ids))
+        out.append({**e, "verified": ok})
+    return out
+
+
+def live_error(service: str, window: str = "30s") -> dict | None:
+    """The service's error rate over the last few seconds, straight from Prometheus (the watcher's window is longer)."""
+    metric = settings.system()["telemetry"]["metrics"]["error_metric"]
+    sel = f'service_name="{service}",span_kind=~"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER"'
+    try:
+        def q(expr):
+            r = httpx.get(f"{settings.PROMETHEUS_URL}/api/v1/query", params={"query": expr}, timeout=5).json()["data"]["result"]
+            return float(r[0]["value"][1]) if r else 0.0
+        total = q(f"sum(rate({metric}{{{sel}}}[{window}]))")
+        errs = q(f'sum(rate({metric}{{{sel},status_code="STATUS_CODE_ERROR"}}[{window}]))')
+    except Exception as e:  # noqa: BLE001
+        log.info("live error rate for %s failed: %s", service, e)
+        return None
+    return {"rps": round(total, 3), "error_pct": round(100 * errs / total, 2) if total else 0.0, "window": window}
+
+
 class Escalate(Exception):
     pass
 
@@ -50,6 +93,8 @@ class Pipeline:
         self.auto = self.system.get("autonomy", {}).get("auto", [])
         self.run_stage_impl = runner()
         self.out: dict[str, dict] = {}
+        self.corpus = ""          # every tool output of this incident, normalized: evidence is checked against it
+        self.stage_ended: dict[str, float] = {}
 
     # ---------- helpers ----------
     def _cost(self) -> float:
@@ -65,7 +110,7 @@ class Pipeline:
         payload = {
             "incident": {k: self.inc[k] for k in ("id", "service", "severity", "category", "summary") if self.inc.get(k)},
             "trigger": self.inc.get("trigger"),
-            "system": {k: self.system[k] for k in ("name", "domain", "repo", "runtime", "services", "telemetry") if k in self.system},
+            "system": {k: self.system[k] for k in ("name", "domain", "repo", "runtime", "services", "shared_paths", "telemetry") if k in self.system},
             "previous": self.out,
             "attempt": attempt,
             **(extra or {}),
@@ -93,6 +138,15 @@ class Pipeline:
                  {"error": str(last_err)}, self.id, name)
             bus.publish("stage.failed", f"{name} failed: {last_err}", self.id, name)
             raise Escalate(f"{name} failed twice: {last_err}")
+        self.corpus += " " + " ".join(_norm(c.get("result", "")) for c in res.tool_calls)
+        if isinstance(res.output.get("evidence"), list):
+            res.output["evidence"] = check_evidence(res.output["evidence"], self.corpus)
+            bad = [e for e in res.output["evidence"] if not e["verified"]]
+            res.output["unverified_evidence"] = len(bad)
+            if bad:
+                bus.publish("evidence.unverified", f"{len(bad)} of {len(res.output['evidence'])} evidence items are not in any tool output",
+                            self.id, name, {"items": bad[:5]})
+        self.stage_ended[name] = time.time()
         db.q("update stages set status='done', ended_at=now(), cost_usd=%s, output=%s "
              "where incident_id=%s and name=%s and status in ('running','waiting_approval')",
              res.cost_usd, res.output, self.id, name)
@@ -114,9 +168,9 @@ class Pipeline:
         self.inc = db.one("select * from incidents where id=%s", self.id)
 
     # ---------- the pipeline ----------
-    def run(self) -> None:
+    def run(self, resume: bool = False) -> None:
         try:
-            self._run()
+            self._run(resume)
         except Escalate as e:
             self.escalate(str(e))
         except Exception as e:  # noqa: BLE001
@@ -150,7 +204,8 @@ class Pipeline:
             "docs": "diagnosis" in self.out,
             "plan": "diagnosis" in self.out and (reproduced or not code_path),
             "mitigation": "plan" in self.out,
-            "verify": self._last("mitigation") > self._last("verify"),
+            # verify after every change; or once more when it said "not recovered" but live numbers look healthy
+            "verify": self._last("mitigation") > self._last("verify") or self._recheck_verify(),
             "fix": code_path and reproduced and bool(self._ok("plan", "fix_needed", True)),
             "test": self._last("fix") > self._last("test"),
             "pr": tests_ok,
@@ -164,6 +219,19 @@ class Pipeline:
             if ok and used < self.LIMITS[stage]:
                 moves[stage] = f"allowed ({used}/{self.LIMITS[stage]} runs used)"
         return moves
+
+    def _recheck_verify(self) -> bool:
+        if "verify" not in self.out or self._ok("verify", "recovered") or self._last("verify") < self._last("mitigation"):
+            return False
+        live = live_error(self.inc["service"])
+        limit = self.system["services"].get(self.inc["service"], {}).get("slo", {}).get("max_error_pct", 5)
+        self._live_note = live
+        return bool(live) and live["rps"] > 0 and live["error_pct"] <= limit
+
+    def _next_option(self) -> dict | None:
+        opts = self._ok("plan", "options", []) or []
+        i = self.attempts.get("mitigation", 0)
+        return opts[i] if i < len(opts) and isinstance(opts[i], dict) else None
 
     def default_next(self, moves: dict) -> dict:
         """The plain rule-based choice. Used as the supervisor's hint and as the fallback."""
@@ -183,6 +251,16 @@ class Pipeline:
             if stage in moves and (stage not in self.out or stage == "verify"):
                 return {"action": "run", "stage": stage}
         if self._last("verify") > self._last("mitigation") and not self._ok("verify", "recovered"):
+            # every change is a new risk: prove it is needed before making another one
+            if "verify" in moves:
+                live = getattr(self, "_live_note", None) or {}
+                return {"action": "run", "stage": "verify",
+                        "message": f"Live error rate over the last {live.get('window', '30s')} is {live.get('error_pct')}% "
+                                   f"({live.get('rps')} req/s). Check again before anything else is changed."}
+            nxt = self._next_option()
+            if nxt and nxt.get("speculative"):
+                return {"action": "escalate", "reason": f"The last change did not recover the service and the next option "
+                                                        f"({nxt.get('action')}) is a guess without evidence. A person should decide."}
             if "mitigation" in moves:
                 return {"action": "run", "stage": "mitigation", "message": "The last action did not recover the service. Use the next option."}
             return {"action": "escalate", "reason": "Mitigation did not recover the service."}
@@ -208,12 +286,35 @@ class Pipeline:
         """What the supervisor sees: each agent's latest answer, trimmed."""
         keep = ("summary", "confidence", "real_incident", "category", "root_cause", "reproduced", "disproved_reason",
                 "chosen", "fix_needed", "action_taken", "denied", "recovered", "passed", "failing_tests", "pr_url",
-                "verdict", "comments", "promoted", "external", "suspect_commit")
+                "verdict", "comments", "promoted", "external", "suspect_commit", "unverified_evidence")
         return {st: {k: v for k, v in (o or {}).items() if k in keep} for st, o in self.out.items()}
+
+    def needs_judgement(self, moves: dict, hint: dict) -> str | None:
+        """Call the supervisor only where it can change the outcome. Returns why, or None for a clear next step."""
+        if hint.get("action") == "escalate":
+            return None  # a guardrail forces this: nothing to decide
+        if len(moves) <= 1:
+            return None
+        last = self.history[-1]["stage"] if self.history else None
+        o = self.out.get(last) or {}
+        if o.get("confidence", 1) < 0.75:
+            return f"{last} is unsure (confidence {o.get('confidence')})"
+        for key, bad in (("reproduced", False), ("recovered", False), ("passed", False), ("verdict", "changes"), ("denied", True)):
+            if key in o and o[key] == bad:
+                return f"{last} answered {key}={bad}"
+        asked_before = any(h.get("action") == "ask" and h.get("stage") == last for h in self.history)
+        if o.get("unverified_evidence") and not asked_before:  # ask once; then the dashboard shows them as unverified
+            return f"{last} cites {o['unverified_evidence']} evidence item(s) no tool returned"
+        if last in ("pr", "review") and o.get("summary") and "not" in o.get("summary", "").lower():
+            return f"{last} reports a problem"
+        return None
 
     def supervise(self, moves: dict, hint: dict) -> dict:
         if settings.STAGE_RUNNER == "fake" or not settings.SUPERVISOR:
-            return {**hint, "reason": "rule-based order"}
+            return {**hint, "reason": "rule-based order", "by": "rules"}
+        why = self.needs_judgement(moves, hint)
+        if not why:
+            return {**hint, "reason": hint.get("reason") or "clear next step; supervisor not needed", "by": "rules"}
         payload = {
             "incident": {k: self.inc.get(k) for k in ("id", "service", "severity", "category", "summary")},
             "latest_answers": self._brief(),
@@ -222,14 +323,16 @@ class Pipeline:
             "rule_based_suggestion": hint,
             "steps_left": self.MAX_STEPS - len(self.history),
             "budget_left_usd": round(settings.INCIDENT_BUDGET_USD - self._cost(), 3),
+            "why_you_are_asked": why,
         }
         try:
             res = self.run_stage_impl.run(self.id, "supervisor", "ns-supervisor", payload, self.auto)
             db.q("update incidents set total_cost_usd = total_cost_usd + %s where id=%s", res.cost_usd, self.id)
-            return res.output
+            return {**res.output, "by": "supervisor", "asked_because": why, "session_id": res.session_id,
+                    "cost_usd": round(res.cost_usd, 4)}
         except Exception as e:  # noqa: BLE001
             log.warning("supervisor failed, using rules: %s", e)
-            return {**hint, "reason": f"supervisor unavailable ({e}); rule-based order"}
+            return {**hint, "reason": f"supervisor unavailable ({str(e)[:120]}); rule-based order", "by": "rules"}
 
     def _valid(self, d: dict, moves: dict) -> str | None:
         """Return why a decision breaks the rules, or None if it is allowed."""
@@ -250,17 +353,34 @@ class Pipeline:
             return "ask/send_back needs a message"
         return None
 
-    def _run(self) -> None:
+    def save_state(self) -> None:
+        db.q("update incidents set state=%s where id=%s",
+             {"out": self.out, "attempts": self.attempts, "history": self.history, "stage_ended": self.stage_ended}, self.id)
+
+    def _restore(self) -> bool:
+        st = self.inc.get("state") or {}
+        if not st.get("history"):
+            return False
+        self.out, self.attempts, self.history = st["out"], st["attempts"], st["history"]
+        self.stage_ended = st.get("stage_ended", {})
+        for r in db.q("select data->>'result' r from events where incident_id=%s and kind='tool.result'", self.id):
+            self.corpus += " " + _norm(r["r"] or "")
+        bus.publish("incident.resumed", f"NightShift restarted; continuing {self.id} after step {len(self.history)}.", self.id)
+        return True
+
+    def _run(self, resume: bool = False) -> None:
         self.history: list[dict] = []
         self.attempts: dict[str, int] = {}
-        tri = self.stage("triage")
-        self.attempts["triage"] = 1
-        self.history.append({"step": 0, "action": "run", "stage": "triage", "done": True, "reason": "every incident starts with triage"})
-        if not tri.get("real_incident", True):
-            self.set(status="false_alarm", summary=tri.get("summary"))
-            bus.publish("incident.closed", "False alarm: numbers are within normal variation. No action taken.", self.id)
-            return
-        self.set(severity=tri.get("severity"), category=tri.get("category"), service=tri.get("service") or self.inc["service"])
+        if not (resume and self._restore()):
+            tri = self.stage("triage")
+            self.attempts["triage"] = 1
+            self.history.append({"step": 0, "action": "run", "stage": "triage", "done": True, "reason": "every incident starts with triage"})
+            if not tri.get("real_incident", True):
+                self.set(status="false_alarm", summary=tri.get("summary"))
+                bus.publish("incident.closed", "False alarm: numbers are within normal variation. No action taken.", self.id)
+                return
+            self.set(severity=tri.get("severity"), category=tri.get("category"), service=tri.get("service") or self.inc["service"])
+            self.save_state()
 
         while len(self.history) < self.MAX_STEPS:
             moves = self.allowed_moves()
@@ -276,7 +396,10 @@ class Pipeline:
             label = {"run": f"run {stage}", "ask": f"ask {stage}", "send_back": f"send back to {stage}",
                      "escalate": "escalate to a human", "finish": "finish"}.get(act, act)
             bus.publish("supervisor.decision", f"{label}: {d.get('reason', '')}", self.id, stage,
-                        {"decision": d, "allowed": list(moves), "suggested": hint})
+                        {"decision": {k: v for k, v in d.items() if k not in ("session_id", "cost_usd", "by", "asked_because")},
+                         "allowed": list(moves), "suggested": hint, "by": d.get("by", "supervisor"),
+                         "asked_because": d.get("asked_because"), "session_id": d.get("session_id"), "cost_usd": d.get("cost_usd"),
+                         "url": f"{settings.TRUEFORGE_BASE_URL}/sessions/{d['session_id']}" if d.get("session_id") else None})
 
             if act == "escalate":
                 raise Escalate(d.get("reason") or "Supervisor escalated.")
@@ -298,6 +421,16 @@ class Pipeline:
                 extra["previous_test_output"] = self._ok("test", "output")
             if stage == "fix" and "review" in self.out:
                 extra["review_comments"] = self._ok("review", "comments")
+            if stage == "verify":
+                # metrics need time to show a change: wait, then tell the verifier exactly how long ago it happened
+                changed = self.stage_ended.get("mitigation", 0)
+                wait_s = settings.VERIFY_SETTLE_S - (time.time() - changed)
+                if changed and wait_s > 0:
+                    bus.publish("stage.waiting", f"Waiting {int(wait_s)}s for fresh metrics before verifying", self.id, "verify")
+                    time.sleep(wait_s)
+                extra.update({"seconds_since_change": int(time.time() - changed) if changed else None,
+                              "live_now": live_error(self.inc["service"]),
+                              "change": self._ok("mitigation", "action_taken"), "change_summary": self._ok("mitigation", "summary")})
 
             self.attempts[stage] = self.attempts.get(stage, 0) + 1
             out = self.stage(stage, extra, self.attempts[stage])
@@ -317,6 +450,7 @@ class Pipeline:
             if stage == "pr" and out.get("pr_url"):
                 self.set(pr_url=out["pr_url"])
                 jira.comment(self.inc.get("jira_key"), f"Fix ready for review: {out['pr_url']}")
+            self.save_state()
         else:
             raise Escalate(f"Stopped after {self.MAX_STEPS} steps without resolving.")
 
@@ -338,11 +472,16 @@ class Pipeline:
         lines = [f"Incident {self.id} on {self.inc['system']} / {self.inc['service']} ({self.inc.get('severity')})", "",
                  "Root cause:", diag.get("root_cause", diag.get("summary", "")), "", "Evidence:"]
         for e in diag.get("evidence", [])[:8]:
-            lines.append(f"- [{e.get('source', '?')}] {e.get('text') or e.get('detail') or json.dumps(e)[:200]}"
-                         + (f" {e['link']}" if e.get("link") else ""))
+            if not isinstance(e, dict):
+                continue
+            lines.append(f"- [{e.get('source', '?')}]{'' if e.get('verified', True) else ' [unverified]'} "
+                         f"{e.get('text') or e.get('detail') or json.dumps(e)[:200]}" + (f" {e['link']}" if e.get("link") else ""))
         lines += ["", "Options:"]
         for o in plan.get("options", []):
-            lines.append(f"- {o.get('action')} (risk {o.get('risk')}, reversible: {o.get('reversible')}, blast radius: {o.get('blast_radius', 'n/a')})")
+            if not isinstance(o, dict):
+                continue
+            lines.append(f"- {o.get('action')} (risk {o.get('risk')}, reversible: {o.get('reversible')}, blast radius: {o.get('blast_radius', 'n/a')})"
+                         + (" [SPECULATIVE: no direct evidence]" if o.get("speculative") else f" evidence: {str(o.get('evidence', ''))[:160]}"))
         lines += ["", f"Chosen: {plan.get('chosen')}", "",
                   "NightShift will ask here before each change. Reply /approve or /deny <reason>."]
         return "\n".join(lines)
@@ -378,8 +517,10 @@ def start_worker() -> None:
 
 
 def resume_unfinished() -> None:
-    """After a restart, incidents that were mid-pipeline are escalated with a clear note (their sessions are gone)."""
-    for row in db.q("select id from incidents where status='open'"):
+    """After a restart, unfinished incidents continue from their last completed step. The step that was running is
+    decided again (its TrueForge turn died with the old process); approvals it was waiting for expire."""
+    for row in db.q("select id from incidents where status in ('open','mitigated') and stage is distinct from 'done'"):
         for a in approvals.pending(row["id"]):
-            approvals.decide(a["id"], "deny", "policy", "restart", "NightShift restarted while waiting")
-        Pipeline(row["id"]).escalate("NightShift restarted mid-incident; please review.")
+            approvals.decide(a["id"], "deny", "policy", "restart", "NightShift restarted while waiting; the step will be retried")
+        db.q("update stages set status='interrupted', ended_at=now() where incident_id=%s and status in ('running','waiting_approval')", row["id"])
+        threading.Thread(target=Pipeline(row["id"]).run, kwargs={"resume": True}, daemon=True, name=f"pipeline-{row['id']}").start()

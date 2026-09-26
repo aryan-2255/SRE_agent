@@ -47,12 +47,12 @@ PY
   echo "  SHOP_PATH fixed for this machine"
 fi
 set_env SHOP_PATH "$SHOP"
-grep -q '^REPO_ROOT=' .env || echo "REPO_ROOT=" >> .env
-CUR_ROOT=$(grep -E '^REPO_ROOT=' .env | cut -d= -f2-)
-if [ -n "$CUR_ROOT" ] && [ ! -d "$CUR_ROOT" ]; then sed -i.bak "s#^REPO_ROOT=.*#REPO_ROOT=#" .env && rm -f .env.bak; fi
-set_env REPO_ROOT "$(cd "$SHOP/.." && pwd)"
 set_env OPS_MCP_TOKEN "$(openssl rand -hex 24)"
 set_env SHOP_DB_ADMIN_PASSWORD "$(grep -E '^POSTGRES_PASSWORD=' "$SHOP/.env" | cut -d= -f2)"
+grep -q '^SHOP_DB_RO_PASSWORD=' .env || echo "SHOP_DB_RO_PASSWORD=" >> .env
+grep -q '^NIGHTSHIFT_DB_RO_PASSWORD=' .env || echo "NIGHTSHIFT_DB_RO_PASSWORD=" >> .env
+set_env SHOP_DB_RO_PASSWORD "$(openssl rand -hex 16)"
+set_env NIGHTSHIFT_DB_RO_PASSWORD "$(openssl rand -hex 16)"
 
 step "Python environment"
 PY=$(command -v python3.12 || command -v python3.13 || command -v python3)
@@ -84,7 +84,7 @@ cat <<'MSG'
 == Done. Next:
   1. ./scripts/start-trueforge.sh                (keep it running; open http://localhost:8790)
      In TrueForge Settings add: a model provider, Daytona sandbox, GitHub connector, Jira connector.
-  2. ./.venv/bin/python scripts/setup_trueforge.py   (registers the ops server and all 13 agents)
+  2. ./.venv/bin/python scripts/setup_trueforge.py   (registers the ops server and all 14 agents)
   3. ./.venv/bin/uvicorn control.app:app --port 8090 (dashboard at http://localhost:8090)
   Details: SETUP.md
 MSG
