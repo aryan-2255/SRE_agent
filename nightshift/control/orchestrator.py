@@ -23,6 +23,9 @@ AGENTS = {
 }
 
 
+# Agents that reason about code get the system map (scripts/map_system.py) in their input.
+MAP_STAGES = {"diagnosis", "validation", "plan", "fix", "test", "review"}
+
 # Claims a model may not invent: each must match the result of a real tool call in the same stage.
 BACKED_CLAIMS = {"pr": ("pr_url", "create_pull_request"), "cicd": ("promoted", "promote_canary")}
 
@@ -94,6 +97,8 @@ class Pipeline:
         self.run_stage_impl = runner()
         self.out: dict[str, dict] = {}
         self.corpus = ""          # every tool output of this incident, normalized: evidence is checked against it
+        map_file = settings.ROOT / "systems" / f"{self.inc['system']}.map.md"
+        self.system_map = map_file.read_text() if map_file.exists() else ""
         self.stage_ended: dict[str, float] = {}
 
     # ---------- helpers ----------
@@ -115,6 +120,8 @@ class Pipeline:
             "attempt": attempt,
             **(extra or {}),
         }
+        if name in MAP_STAGES and self.system_map:
+            payload["system_map"] = self.system_map  # the architecture up front: fewer calls rediscovering it
         last_err = None
         for tries in range(2):  # one retry if the answer is not valid JSON or the call failed
             try:

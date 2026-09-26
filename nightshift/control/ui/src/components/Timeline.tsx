@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useEngine } from "../engine/useEngine";
+import { engine } from "../engine/engine";
 import { useFocus } from "../engine/focus";
 import { WHO } from "../engine/constants";
 import { clock, mmss, ease } from "../lib/format";
@@ -69,7 +70,7 @@ export default function Timeline() {
     const dim = focus && focus !== lane && lane !== "supervisor";
     return (
       <div key={lane} className="flex h-[16px] items-center transition-opacity duration-200" style={{ opacity: dim ? 0.3 : 1 }}>
-        <button onClick={() => lane !== "supervisor" && setFocus(focus === lane ? null : lane, true)}
+        <button onClick={() => { engine.setFollow(false); setFocus(focus === lane ? null : lane, true); }}
           className="shrink-0 truncate pr-3 text-left text-[12px] leading-[16px] transition-colors duration-150 hover:text-ink"
           style={{ width: LABEL_W, color: focus === lane ? "var(--ink)" : "var(--muted)", fontWeight: focus === lane ? 600 : 400 }}>{WHO[lane] || lane}</button>
         <div className="relative h-full min-w-0 flex-1">

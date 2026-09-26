@@ -65,6 +65,9 @@ fi
 ./.venv/bin/pip install -q -r requirements.txt
 echo "venv ready ($(./.venv/bin/python -V))"
 
+step "System map (the architecture the agents get up front)"
+./.venv/bin/python scripts/map_system.py || echo "map not built; agents will read the code on demand"
+
 step "Dashboard (React)"
 if command -v npm >/dev/null 2>&1; then
   (cd control/ui && npm ci --silent && npm run build --silent) && echo "dashboard built into control/ui/dist"

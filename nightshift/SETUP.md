@@ -104,6 +104,8 @@ Within about a minute the dashboard shows an incident; the agents diagnose it an
 | `.venv/bin/python -m pytest -q tests` | Guardrail tests (no models needed, under a second) |
 | `.venv/bin/python evals/run.py [scenario…]` | Break the shop in 8 known ways and score detection, cause, fix, cost (set `WATCH_COOLDOWN_S=60`, `JIRA_DRY_RUN=true` first) |
 | `docs/MANUAL-TEST.md` | Step-by-step: plant a bug and watch the agents fix it |
+| `.venv/bin/python scripts/map_system.py` | Rebuild `systems/<name>.map.md`, the architecture the agents get up front (run after big code changes) |
+| `cd control/ui && npm run build` | Rebuild the dashboard after changing `control/ui` (the control service serves `control/ui/dist`) |
 
 ## Working together
 

@@ -28,7 +28,8 @@ npm run build      # writes dist/, which FastAPI serves at http://localhost:8090
 | `src/components/LeftColumn.tsx` | Watcher services, synthetic customer, tool traffic. |
 | `src/components/RightColumn.tsx` | Approval card, conversation, evidence. |
 | `src/components/Timeline.tsx` | One lane per agent; block length is the exact time it worked. |
-| `src/components/Drawer.tsx` | Incidents, connections, system file. |
+| `src/components/Drawer.tsx` | Incidents, the team (from `/api/agents`), connections, system file. |
+| `src/components/AgentPanel.tsx` | Click an agent, its stage or lane, or the supervisor hub: status, model, tools, what it asks you before, cost and time, its answer (options, evidence checked or not), and every tool call with its output. The supervisor's panel lists each decision and whether the rules or the AI made it. |
 | `src/components/vendor/` | Adapted open-source pieces: CountUp (React Bits), BorderBeam (VengeanceUI), IconSwap (Amicro). MIT, credited in each file. |
 | `src/index.css` | Design tokens for the dark and light themes, and the motion keyframes. |
 
@@ -42,6 +43,7 @@ npm run build      # writes dist/, which FastAPI serves at http://localhost:8090
 
 ## Demo helpers
 
-- `/#replay-INC-001` replays an incident; `/#view-INC-001` opens it finished.
+- `/#replay-INC-001` replays an incident; `/#view-INC-001` opens it finished; `/#INC-001/diagnosis` opens it with that agent's panel.
+- "Follow the live agent" (map header) keeps the panel on whichever agent is working.
 - `?speed=3` slows a replay (default 6× faster than real time); Space pauses and resumes.
 - A replay holds about four seconds on every approval request.

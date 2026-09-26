@@ -1,0 +1,47 @@
+[
+ {
+  "id": "product-catalog-failure",
+  "detected": true,
+  "incident": "INC-016",
+  "detect_s": 103,
+  "service": "product-catalog",
+  "first_change": {
+   "tool": "set_flag",
+   "args": {
+    "flag": "productCatalogFailure",
+    "variant": "off"
+   }
+  },
+  "fix_ok": true,
+  "mitigate_s": 276,
+  "status": "resolved",
+  "cost_usd": 0.313,
+  "total_s": 298,
+  "cause_ok": true,
+  "service_ok": true,
+  "unverified_evidence": 0,
+  "ok": true
+ },
+ {
+  "id": "kafka-queue-problems",
+  "detected": true,
+  "incident": "INC-017",
+  "detect_s": 323,
+  "service": "fraud-detection",
+  "first_change": {
+   "tool": "set_flag",
+   "args": {
+    "flag": "kafkaQueueProblems",
+    "variant": "off"
+   }
+  },
+  "fix_ok": true,
+  "status": "open",
+  "cost_usd": 0.168,
+  "total_s": 489,
+  "cause_ok": true,
+  "service_ok": true,
+  "unverified_evidence": 0,
+  "ok": false
+ }
+]

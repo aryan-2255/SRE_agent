@@ -242,6 +242,13 @@ export default function NetworkMap({ onHover }: { onHover?: (h: Hover) => void }
                 <text x={p.x + 29} y={p.y - 25} textAnchor="middle" fontSize={12} fontWeight={700} style={{ fill: "var(--sup-fill)" }}>{runs}</text>
               </g>
             )}
+            {s.unverified[id] ? (
+              <g>
+                <title>{`${s.unverified[id]} evidence item(s) not found in any tool output`}</title>
+                <circle cx={p.x + 29} cy={p.y + 29} r={10} style={{ fill: "var(--red)" }} />
+                <text x={p.x + 29} y={p.y + 33.5} textAnchor="middle" fontSize={13} fontWeight={800} style={{ fill: "var(--panel)" }}>!</text>
+              </g>
+            ) : null}
             {sats.map((t, i) => {
               const a = -Math.PI / 2 + i * 0.75, r = 58;
               const cx = p.x + r * Math.cos(a), cy = p.y + r * Math.sin(a);

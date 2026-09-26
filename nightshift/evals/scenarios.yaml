@@ -20,6 +20,7 @@
 - id: kafka-queue-problems
   break: { flag: kafkaQueueProblems, variant: "on" }
   expect: { service: [fraud-detection, accounting, kafka, checkout], cause: [kafkaQueueProblems, kafka, lag], fix: { tool: set_flag, args: { flag: kafkaQueueProblems, variant: "off" } } }
+  timeout_s: 720   # queue lag takes a few minutes to build up
 - id: payment-bad-deploy
   break: { chaos: payment-bug }
   expect: { service: [payment], cause: [validateAmount, commit, nanos], fix: { tool: rollback, args: { service: payment } } }

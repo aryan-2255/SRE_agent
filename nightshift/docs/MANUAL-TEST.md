@@ -60,7 +60,7 @@ Other ideas: `src/checkout` (Go) and `src/cart` (C#) also work, but the sandbox 
 
 | What | Where |
 |---|---|
-| The board: every agent as a strip, the one working pulled out; click a strip to see its answer, evidence and every tool call | http://localhost:8090 |
+| The operations room: the agent network around the supervisor. Click any agent (or the supervisor) for its answer, evidence and every tool call; "Follow the live agent" keeps that panel on whoever is working | http://localhost:8090 |
 | Each agent's full conversation and tool calls | http://localhost:8790 → Sessions |
 | Ticket, plan, approvals | Jira project SRE: https://aryanmatrixx.atlassian.net/jira/software/projects/SRE/boards |
 | Branch and pull request | https://github.com/aryan-2255/opentelemetry-demo/pulls |
@@ -82,7 +82,7 @@ What should happen. Times are from our test run on 26 Sep (INC-004/005), measure
 | 9 | **PR**: branch `nightshift/INC-xxx-…`, commit, pull request on the fork | ~1 min | Approve create_branch, push_files, create_pull_request |
 | 10 | **Review**: reviewer reads the diff and posts a review on the PR | ~30 s | — |
 | 11 | **CI/CD**: merge, build the merged commit, canary at 10%, compare, promote | ~3 min | Approve merge, deploy_canary, promote_canary |
-| 12 | **Postmortem** to Jira and the dashboard → *resolved* | ~30 s | — |
+| 12 | **Postmortem** to Jira and the dashboard → *resolved* | ~30 s | Approve notify (nothing is automatic) |
 
 About 15–20 minutes end to end and about $3 of model usage. The model API sometimes stalls for 5 minutes; the stage then retries on its own and continues where it stopped.
 

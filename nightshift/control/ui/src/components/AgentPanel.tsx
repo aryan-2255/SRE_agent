@@ -73,7 +73,7 @@ function Answer({ o }: { o: Record<string, any> }) {
                   {x.tool && <code className="col-span-2 font-mono text-[12px] text-ink-2">{x.tool}({Object.entries(x.args || {}).map(([k, v]) => `${k}=${v}`).join(", ")})</code>}
                   <div className="col-span-2 text-[12.5px]">
                     {x.speculative
-                      ? <span className="rounded-md px-1.5 py-0.5 font-semibold" style={{ background: "var(--amber-soft)", color: "var(--amber-ink)" }}>Guess, no evidence</span>
+                      ? <span className="rounded-md px-1.5 py-0.5 font-semibold" style={{ background: "var(--red-soft)", color: "var(--red-ink)" }}>Guess, no evidence</span>
                       : <span className="text-muted">{x.evidence}</span>}
                   </div>
                 </div>
@@ -91,11 +91,11 @@ function Answer({ o }: { o: Record<string, any> }) {
               const unverified = e?.verified === false;
               return (
                 <li key={i} className="rounded-lg py-1 pl-3 text-[13px] text-ink-2"
-                  style={{ boxShadow: `inset 2px 0 0 ${unverified ? "var(--amber)" : "var(--go)"}` }}>
+                  style={{ boxShadow: `inset 2px 0 0 ${unverified ? "var(--red)" : "var(--go)"}` }}>
                   <div className="break-words">{text}</div>
                   <div className="mt-0.5 text-[12px] text-muted">
                     {e?.source}{e?.link && <> · <a href={e.link} target="_blank" rel="noopener">open</a></>}
-                    {unverified ? <span className="ml-1 font-semibold" style={{ color: "var(--amber-ink)" }}>not found in any tool output</span>
+                    {unverified ? <span className="ml-1 font-semibold" style={{ color: "var(--red-ink)" }}>not found in any tool output</span>
                       : e?.verified ? " · checked against the tool output" : ""}
                   </div>
                 </li>
@@ -148,7 +148,7 @@ function stepsFor(events: NsEvent[], stage: string): Step[] {
       }
       case "sandbox": add({ icon: Cube, tone: "var(--data)", title: "Started a Daytona sandbox: isolated, no secrets, no access to the live shop" }); break;
       case "subagent": add({ icon: Compass, tone: "var(--muted)", title: e.text }); break;
-      case "evidence.unverified": add({ icon: WarningOctagon, tone: "var(--amber)", title: e.text }); break;
+      case "evidence.unverified": add({ icon: WarningOctagon, tone: "var(--red)", title: e.text }); break;
       case "stage.waiting": add({ icon: Hourglass, tone: "var(--muted)", title: e.text }); break;
       case "stage.retry": case "stage.failed": add({ icon: WarningOctagon, tone: "var(--red)", title: e.text }); break;
       case "approval.requested": {
@@ -182,7 +182,7 @@ function AgentDetail({ id }: { id: string }) {
         if (e.kind === "stage.done") { output = e.data?.output; cost += Number(e.data?.cost_usd || 0); }
       }
     }
-    if (start) spent += (s.tEnd || s.lastTs || Date.now()) - start;
+    if (start) spent += (s.tEnd || s.lastTs || start) - start;
     return { output, session, cost, spent, calls };
   }, [s.events, s.lastTs, s.tEnd, id]);
   const steps = useMemo(() => stepsFor(s.events, id), [s.events, id]);
@@ -210,7 +210,7 @@ function AgentDetail({ id }: { id: string }) {
         <dt className="text-muted">Tools</dt>
         <dd className="m-0 text-ink-2">{Object.entries(team?.tools || {}).map(([srv, ts]) => <div key={srv}><span className="text-muted">{srv}:</span> {ts.join(", ")}</div>)}</dd>
       </dl>
-      {s.unverified[id] ? <p className="m-0 mt-3 rounded-lg px-3 py-2 text-[13px] font-medium" style={{ background: "var(--amber-soft)", color: "var(--amber-ink)" }}>
+      {s.unverified[id] ? <p className="m-0 mt-3 rounded-lg px-3 py-2 text-[13px] font-medium" style={{ background: "var(--red-soft)", color: "var(--red-ink)" }}>
         {s.unverified[id]} evidence item(s) were not found in any tool output.</p> : null}
       {info.session && <a href={info.session} target="_blank" rel="noopener" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium">Full session in TrueForge<ArrowSquareOut size={12} /></a>}
 

@@ -126,7 +126,7 @@ export default function Header({ onMenu }: { onMenu: () => void }) {
           </span>
           {mode.label}
         </div>
-        {s.me?.name && <span className="text-[13px] text-muted max-[1499px]:hidden" title="Approvals are recorded under this name">{s.me.name}</span>}
+        {s.me?.name && <span className="max-w-[120px] truncate text-[13px] text-muted" title={`Signed in as ${s.me.name}: approvals are recorded under this name`}>{s.me.name}</span>}
         <div className="flex items-center gap-2">
           <button onClick={toggle} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
             className="grid size-9 place-items-center rounded-lg text-ink-2 transition-colors duration-150 hairline hover:bg-panel-3 active:scale-[0.97]">

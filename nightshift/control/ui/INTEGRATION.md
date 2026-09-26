@@ -1,5 +1,15 @@
 # Instructions for the coding agent: make this dashboard primary, then port the missing features into it
 
+> **Status (26 Sep, after integration):** done. All nine items in section 3 are ported into this dashboard in its own
+> design (tokens, Geist, Motion). Checked per section 5: `npx tsc -b && npm run build` clean; 1280×800, 1440×900 and
+> 1920×1080 in dark and light with no console errors and no page overflow (checked through the Chrome DevTools protocol);
+> `/#replay-INC-015` paused on the sign-off card shows every context row, and Approve / Deny stay in view at 1280×800;
+> the approval identity rule is covered by `tests/test_guardrails.py::test_the_server_decides_who_approves`.
+> Where things live: agent and supervisor panel `src/components/AgentPanel.tsx`; approval context `RightColumn.tsx`;
+> watcher signals, endpoint line and blind banner `LeftColumn.tsx`; Team tab `Drawer.tsx`; follow toggle `CenterStage.tsx`;
+> new events, sign-in, deep links, follow mode `src/engine/engine.ts`. `control/web` stays as the fallback (section 1).
+
+
 You are integrating the React dashboard in `nightshift/control/ui` into NightShift. Two dashboards exist:
 
 - **This one** (`control/ui`, React): the agent network around the supervisor, with the interaction and motion the team wants for the demo. **It is the primary dashboard.** Keep its design.

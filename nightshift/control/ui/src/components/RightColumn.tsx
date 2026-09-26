@@ -43,20 +43,20 @@ export function Approval() {
           animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
           exit={{ opacity: 0, y: -10, scale: 0.98, filter: "blur(4px)", transition: { duration: 0.2 } }}
           transition={{ type: "spring", duration: 0.55, bounce: 0.12 }}
-          className="relative shrink-0 overflow-hidden rounded-[18px] p-5"
+          className="relative flex min-h-[260px] shrink flex-col overflow-hidden rounded-[18px] p-5"
           style={{ background: "color-mix(in oklab, var(--amber) 7%, var(--panel))", boxShadow: "var(--shadow-lift), inset 0 0 0 1px color-mix(in oklab, var(--amber) 42%, transparent)" }}
           aria-live="assertive">
           <BorderBeam size={200} duration={6} colorFrom="var(--amber)" />
-          <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: "var(--amber-ink)" }}>
+          <div className="flex shrink-0 items-center gap-2 text-[13px] font-semibold" style={{ color: "var(--amber-ink)" }}>
             <Signature size={18} weight="fill" />
             Paused before a production change
             <span className="ml-auto rounded-md px-2 py-0.5 text-[12px] font-medium text-ink-2 hairline">{WHO[a.stage] || a.stage}</span>
           </div>
-          <h3 className="m-0 mt-3 text-[22px] font-semibold tracking-[-0.02em]">
+          <h3 className="m-0 mt-3 shrink-0 text-[22px] font-semibold tracking-[-0.02em]">
             Allow <span className="font-mono text-[21px]">{a.tool}</span>?
           </h3>
           {args.length > 0 && (
-            <dl className="m-0 mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-xl bg-panel px-3.5 py-3 font-mono text-[13.5px] hairline">
+            <dl className="m-0 mt-3 grid shrink-0 grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-xl bg-panel px-3.5 py-3 font-mono text-[13.5px] hairline">
               {args.map(([k, v]) => (
                 <div key={k} className="contents">
                   <dt className="text-muted">{k}</dt>
@@ -65,32 +65,34 @@ export function Approval() {
               ))}
             </dl>
           )}
-          <dl className="m-0 mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13.5px] leading-[1.45]">
+          <div className="scroll -mr-2 min-h-0 flex-1 overflow-y-auto pr-2">
+          <dl className="m-0 mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13.5px] leading-[1.45]">
             <dt className="text-muted">Right now</dt>
-            <dd className="m-0 text-ink-2">
+            <dd className="m-0 min-w-0 [overflow-wrap:anywhere] text-ink-2">
               {liveNow ? <>
                 <span className="font-semibold" style={{ color: over ? "var(--red-ink)" : "var(--go-ink)" }}>{liveNow.error_pct}% errors</span>
                 {" "}on {ctx.service}{liveNow.failed_requests != null && <>, {liveNow.failed_requests} failed requests in 2 min</>} (limit {liveNow.limit_pct ?? 5}%)
               </> : <span className="text-muted">No live numbers for {ctx.service || "this service"}</span>}
             </dd>
-            {ctx.diagnosis && <><dt className="text-muted">Why</dt><dd className="m-0 text-ink-2">{ctx.diagnosis}</dd></>}
+            {ctx.diagnosis && <><dt className="text-muted">Why</dt><dd className="m-0 line-clamp-3 min-w-0 [overflow-wrap:anywhere] text-ink-2" title={ctx.diagnosis}>{ctx.diagnosis}</dd></>}
             {opt && <>
               <dt className="text-muted">Planner says</dt>
-              <dd className="m-0 text-ink-2">
-                Risk {opt.risk || "?"}, {opt.reversible ? "reversible" : "not reversible"}{opt.blast_radius ? <>; affects {opt.blast_radius}</> : null}.
+              <dd className="m-0 min-w-0 [overflow-wrap:anywhere] text-ink-2">
+                <span className="line-clamp-3" title={opt.blast_radius || ""}>Risk {opt.risk || "?"}, {opt.reversible ? "reversible" : "not reversible"}{opt.blast_radius ? <>; affects {opt.blast_radius}</> : null}.</span>
                 {opt.speculative
-                  ? <span className="ml-1 inline-flex items-center rounded-md px-1.5 py-0.5 text-[12px] font-semibold" style={{ background: "var(--amber-soft)", color: "var(--amber-ink)" }}>Guess, no evidence</span>
-                  : opt.evidence ? <span className="block text-muted">Evidence: {opt.evidence}</span> : null}
+                  ? <span className="ml-1 inline-flex items-center rounded-md px-1.5 py-0.5 text-[12px] font-semibold" style={{ background: "var(--red-soft)", color: "var(--red-ink)" }}>Guess, no evidence</span>
+                  : opt.evidence ? <span className="line-clamp-3 text-muted" title={opt.evidence}>Evidence: {opt.evidence}</span> : null}
               </dd>
             </>}
             <dt className="text-muted">To undo</dt>
-            <dd className="m-0 text-ink-2">{ctx.undo || a.undo || UNDO[a.tool] || "Check the arguments before approving."}</dd>
+            <dd className="m-0 min-w-0 [overflow-wrap:anywhere] text-ink-2">{ctx.undo || a.undo || UNDO[a.tool] || "Check the arguments before approving."}</dd>
           </dl>
           <p className="m-0 mt-3 text-[13px] text-muted">
             {s.me?.name && <>Your decision is recorded as <span className="font-semibold text-ink-2">{s.me.name}</span>.</>}
             {s.inc?.jira_url && <> Or reply <code className="text-ink-2">/approve</code> on <a href={s.inc.jira_url} target="_blank" rel="noopener">{s.inc.jira_key}</a>.</>}
           </p>
-          <div className="mt-4 flex gap-2">
+          </div>
+          <div className="mt-4 flex shrink-0 gap-2">
             <button disabled={!live || !!busy} onClick={() => decide("approve")}
               className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-[15px] font-semibold transition-[transform,opacity,filter] duration-150 enabled:hover:brightness-105 enabled:active:scale-[0.98] disabled:opacity-95"
               style={{ background: "var(--amber)", color: "#1a1204" }}>
@@ -103,7 +105,7 @@ export function Approval() {
           </div>
           <input value={reason} onChange={(e) => setReason(e.target.value)} disabled={!live}
             placeholder={live ? "Reason, sent with a denial" : "Replay: decisions are read-only"}
-            className="mt-2 h-10 w-full rounded-xl bg-panel px-3.5 text-[13.5px] text-ink outline-none transition-shadow duration-150 hairline placeholder:text-dim focus:shadow-[inset_0_0_0_1.5px_var(--amber)] disabled:opacity-70" />
+            className="mt-2 h-10 w-full shrink-0 rounded-xl bg-panel px-3.5 text-[13.5px] text-ink outline-none transition-shadow duration-150 hairline placeholder:text-dim focus:shadow-[inset_0_0_0_1.5px_var(--amber)] disabled:opacity-70" />
           {error && <p className="m-0 mt-2 text-[13px] font-medium" style={{ color: "var(--red-ink)" }}>{error}</p>}
           {!live && <p className="m-0 mt-2 text-[12px] text-dim">Showing {describeArgs(a.args) || a.tool} as it was requested.</p>}
         </motion.section>
