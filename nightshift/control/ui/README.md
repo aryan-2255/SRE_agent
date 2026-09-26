@@ -1,5 +1,7 @@
 # NightShift dashboard (React)
 
+> Integrating this with the strip board in `control/web`? Start with [INTEGRATION.md](INTEGRATION.md).
+
 The operations room for NightShift: the agent network around the supervisor, the watcher, the approval card, the conversation, the evidence and the timeline. React 19 + Vite + Tailwind v4 + Motion. Built files in `dist/` are served by the control service at `/`; without a build, `control/web` (the static page) is served instead.
 
 ```bash
