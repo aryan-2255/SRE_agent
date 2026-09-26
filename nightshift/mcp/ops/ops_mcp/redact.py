@@ -3,8 +3,9 @@ import os
 import re
 
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
-# 13-19 digits, optionally grouped by spaces or dashes: card numbers.
-_CARD = re.compile(r"\b(?:\d[ -]?){12,18}\d\b")
+# 13-19 digits, optionally grouped by spaces or dashes: card numbers. Not part of a decimal number
+# (e.g. 32.1333333333333), so metric values are left alone.
+_CARD = re.compile(r"(?<![\d.])(?:\d[ -]?){12,18}\d(?![\d.])")
 _BEARER = re.compile(r"(?i)\b(bearer|token|api[_-]?key|secret|password)([\"'\s:=]+)[^\s\"',}]{6,}")
 _CVV = re.compile(r"(?i)(\"?(?:cvv|card_cvv|creditCardCvv)\"?\s*[:=]\s*\"?)\d{3,4}")
 

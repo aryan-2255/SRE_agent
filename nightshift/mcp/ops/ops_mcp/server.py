@@ -98,8 +98,9 @@ def get_metrics(promql: str, minutes: int = 15) -> str:
     out = []
     for s in metrics.query_range(promql, minutes)[:20]:
         vals = [float(v[1]) for v in s["values"] if v[1] not in ("NaN", "+Inf", "-Inf")]
-        out.append({"labels": s["metric"], "min": min(vals, default=None), "max": max(vals, default=None),
-                    "last": vals[-1] if vals else None, "points": len(vals)})
+        r4 = lambda v: None if v is None else round(v, 4)
+        out.append({"labels": s["metric"], "min": r4(min(vals, default=None)), "max": r4(max(vals, default=None)),
+                    "last": r4(vals[-1] if vals else None), "points": len(vals)})
     return out
 
 
