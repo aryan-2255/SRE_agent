@@ -184,3 +184,13 @@ def test_the_server_decides_who_approves(monkeypatch):
         app.who(req("127.0.0.1"))            # with users configured, even this machine must sign in
     with pytest.raises(HTTPException):
         app.who(req("127.0.0.1", "guess"))
+
+
+def test_false_alarm_needs_live_confirmation(monkeypatch):
+    p = pipeline({}, [], monkeypatch=monkeypatch, live={"rps": 0.03, "error_pct": 73.8, "window": "2m"})
+    p.system = {**SYSTEM, "watch": {"window": "2m"}}
+    assert "73.8%" in p._still_failing("payment")
+    monkeypatch.setattr(orchestrator, "live_error", lambda svc, window="30s": {"rps": 0.5, "error_pct": 0.0, "window": window})
+    assert p._still_failing("payment") is None
+    monkeypatch.setattr(orchestrator, "live_error", lambda svc, window="30s": {"rps": 0.0, "error_pct": 0.0, "window": window})
+    assert p._still_failing("payment") is None   # no data is not "still failing" either; triage decides then

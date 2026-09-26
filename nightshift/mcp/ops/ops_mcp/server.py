@@ -96,6 +96,8 @@ def get_error_rates(window: str = "2m", services: str = "") -> str:
         if not wanted and not svc and not r.get("error_pct"):
             continue
         r["failed_requests"] = round(r["rps"] * r["error_pct"] / 100 * seconds, 1)
+        if not r["rps"]:
+            r["note"] = f"no requests in the last {window}: 0% here means no data, not healthy. Use a longer window."
         if svc:
             r["threshold_error_pct"] = svc.get("slo", {}).get("max_error_pct")
             r["over_threshold"] = r["error_pct"] > (r["threshold_error_pct"] or 100)

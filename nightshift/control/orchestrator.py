@@ -230,6 +230,14 @@ class Pipeline:
                 moves[stage] = f"allowed ({used}/{self.LIMITS[stage]} runs used)"
         return moves
 
+    def _still_failing(self, service: str) -> str | None:
+        """Why the service is still failing (live numbers over the watcher's window), or None."""
+        limit = self.system["services"].get(service, {}).get("slo", {}).get("max_error_pct", 5)
+        live = live_error(service, self.system["watch"].get("window", "2m"))
+        if live and live["rps"] > 0 and live["error_pct"] > limit:
+            return f"{service} is still at {live['error_pct']}% errors over the last {live['window']}"
+        return None
+
     def _recheck_verify(self) -> bool:
         if "verify" not in self.out or self._ok("verify", "recovered") or self._last("verify") < self._last("mitigation"):
             return False
@@ -390,6 +398,13 @@ class Pipeline:
             tri = self.stage("triage")
             self.attempts["triage"] = 1
             self.history.append({"step": 0, "action": "run", "stage": "triage", "done": True, "reason": "every incident starts with triage"})
+            if not tri.get("real_incident", True):
+                # a false alarm must be confirmed by live numbers: little traffic can make a short window read "0%"
+                still = self._still_failing(tri.get("service") or self.inc["service"])
+                if still:
+                    bus.publish("supervisor.overruled", f"Guardrail: triage called it a false alarm, but {still}. Treating it as real.",
+                                self.id, "triage", {"triage": tri})
+                    tri = {**tri, "real_incident": True}
             if not tri.get("real_incident", True):
                 self.set(status="false_alarm", summary=tri.get("summary"))
                 bus.publish("incident.closed", "False alarm: numbers are within normal variation. No action taken.", self.id)
