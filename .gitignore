@@ -19,3 +19,6 @@ node_modules/
 astronomy-shop/.nightshift/
 astronomy-shop/MY-ORDERS.html
 astronomy-shop/public-gate/shop-qr.png
+
+# local browser test output
+.playwright-mcp/

@@ -15,7 +15,9 @@ from sse_starlette.sse import EventSourceResponse
 from . import approvals, bus, db, jira, ops_client, orchestrator, settings, watcher
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
-WEB = Path(__file__).parent / "web"
+# The React dashboard (control/ui, built with `npm run build`) when present; the original static page otherwise.
+_UI_DIST = Path(__file__).parent / "ui" / "dist"
+WEB = _UI_DIST if (_UI_DIST / "index.html").exists() else Path(__file__).parent / "web"
 
 
 @asynccontextmanager

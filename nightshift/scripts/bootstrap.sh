@@ -65,6 +65,13 @@ fi
 ./.venv/bin/pip install -q -r requirements.txt
 echo "venv ready ($(./.venv/bin/python -V))"
 
+step "Dashboard (React)"
+if command -v npm >/dev/null 2>&1; then
+  (cd control/ui && npm ci --silent && npm run build --silent) && echo "dashboard built into control/ui/dist"
+else
+  echo "npm not found: the control service falls back to the original static dashboard"
+fi
+
 step "Shop settings NightShift needs"
 mkdir -p "$SHOP/.nightshift/payment-lb"
 [ -f "$SHOP/.nightshift/payment-lb/upstream.conf" ] || \
