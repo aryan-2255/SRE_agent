@@ -1,0 +1,4 @@
+[submodule "astronomy-shop"]
+	path = astronomy-shop
+	url = https://github.com/aryan-2255/opentelemetry-demo.git
+	branch = main

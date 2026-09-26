@@ -7,7 +7,7 @@ Built for **Agents That Act** (TrueFoundry × Polaris, Bengaluru, 26 September 2
 **Architecture page:** https://claude.ai/artifact/DZTegNgebksC8Lov1zRkZU · **Setup:** [SETUP.md](SETUP.md) · **Agents:** [agents/README.md](agents/README.md)
 
 ```bash
-git clone https://github.com/aryan-2255/SRE_agent.git truforge_hackthon
+git clone --recursive https://github.com/aryan-2255/SRE_agent.git truforge_hackthon
 cd truforge_hackthon/nightshift && ./scripts/bootstrap.sh
 ```
 
@@ -39,7 +39,7 @@ cd truforge_hackthon/nightshift && ./scripts/bootstrap.sh
 | `chaos/` | Scripts that break and restore the shop for demos |
 | `scripts/` | Bootstrap, TrueForge setup, MCP command-line client |
 | `docs/plan/` | The build plan and interface contracts |
-| `../astronomy-shop/` | The system being watched: OpenTelemetry Astronomy Shop, with `shop.sh` and `SHOP-MAP.html` |
+| `../astronomy-shop/` | The system being watched: OpenTelemetry Astronomy Shop, its own repo (aryan-2255/opentelemetry-demo) where the agents open PRs |
 
 ## Status
 

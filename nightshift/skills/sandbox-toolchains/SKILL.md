@@ -12,10 +12,8 @@ The sandbox is an isolated Linux machine (Python 3.13, git, curl). It has **no a
 ```bash
 git clone --depth 20 --filter=blob:none --sparse "$REPO_URL" repo
 cd repo
-# if the system's repo has a subdir (system.repo.subdir), the service lives under it:
-git sparse-checkout set "$SUBDIR/$SERVICE_PATH"   # e.g. astronomy-shop/src/payment
-cd "$SUBDIR"                                      # skip when there is no subdir
-git log --oneline -5 -- "$SERVICE_PATH"           # the recent commits you may be blaming
+git sparse-checkout set "$SERVICE_PATH"        # e.g. src/payment
+git log --oneline -5 -- "$SERVICE_PATH"         # the recent commits you may be blaming
 ```
 
 ## 2. Toolchains

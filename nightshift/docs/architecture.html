@@ -193,7 +193,8 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; color: var(--mute
     <div><b>2.9 s</b><span>from “/approve” on Jira to the agent continuing</span></div>
   </div>
   <div class="links">
-    <a href="https://github.com/aryan-2255/SRE_agent" target="_blank" rel="noopener">github.com/aryan-2255/SRE_agent</a>
+    <a href="https://github.com/aryan-2255/SRE_agent" target="_blank" rel="noopener">NightShift code</a>
+    <a href="https://github.com/aryan-2255/opentelemetry-demo" target="_blank" rel="noopener">The shop (use case)</a>
     <span class="muted">Status on this page: <span class="st live">verified live</span> <span class="st built">built, not yet run live</span> <span class="st plan">planned</span></span>
   </div>
 </header>
@@ -297,7 +298,7 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; color: var(--mute
         <!-- right side -->
         <rect class="box" x="920" y="40" width="180" height="80" rx="12"/>
         <text class="t" x="936" y="68">GitHub</text>
-        <text class="s" x="936" y="88">aryan-2255/SRE_agent</text>
+        <text class="s" x="936" y="88">the shop’s repo (fork)</text>
         <text class="s" x="936" y="104">commits · branches · PRs</text>
 
         <rect class="box" x="920" y="150" width="180" height="80" rx="12"/>
@@ -538,7 +539,7 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; color: var(--mute
         <tr><td class="nm">Verify</td><td>Recovered? Error rates + synthetic checkout</td><td>MiniMax</td><td>error rates, traces</td><td>–</td><td><span class="st live">live</span></td></tr>
         <tr><td class="nm">Coder</td><td>Smallest fix that makes the failing test pass</td><td>Kimi</td><td>sandbox, GitHub</td><td>–</td><td><span class="st built">built</span></td></tr>
         <tr><td class="nm">Tester</td><td>Runs all tests on the fix in a clean sandbox</td><td>MiniMax</td><td>sandbox, GitHub</td><td>–</td><td><span class="st built">built</span></td></tr>
-        <tr><td class="nm">Pull request</td><td>Branch, push, open the PR on SRE_agent</td><td>MiniMax</td><td>GitHub</td><td class="gate">branch, push, PR</td><td><span class="st built">built</span></td></tr>
+        <tr><td class="nm">Pull request</td><td>Branch, push, open the PR on the shop’s repo</td><td>MiniMax</td><td>GitHub</td><td class="gate">branch, push, PR</td><td><span class="st built">built</span></td></tr>
         <tr><td class="nm">Reviewer</td><td>Reviews the diff; approves or asks for changes</td><td>Kimi</td><td>GitHub</td><td>–</td><td><span class="st built">built</span></td></tr>
         <tr><td class="nm">CI/CD</td><td>Merge, 10% canary, compare, promote</td><td>MiniMax</td><td>GitHub, ops tools</td><td class="gate">merge, canary, promote</td><td><span class="st built">built</span></td></tr>
         <tr><td class="nm">Postmortem</td><td>Blameless write-up; one team update</td><td>MiniMax</td><td>notify</td><td class="muted">team updates are auto-approved</td><td><span class="st live">live</span></td></tr>
@@ -594,7 +595,7 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; color: var(--mute
     </div>
     <div class="card">
       <h3>TrueForge connectors <span class="st live">connected</span></h3>
-      <p><b>GitHub</b> (token for the team repo): read commits and files, create branches, push, open and review PRs, merge.</p>
+      <p><b>GitHub</b> (token for the shop’s repo only): read commits and files, create branches, push, open and review PRs, merge.</p>
       <p><b>Jira</b> (Atlassian login): read and write issues. NightShift’s own approval bridge also uses Jira’s API to read <code>/approve</code> comments every 5 seconds.</p>
     </div>
     <div class="card">
@@ -612,8 +613,7 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; color: var(--mute
 <pre><span class="c"># nightshift/systems/astronomy-shop.yaml (trimmed)</span>
 <span class="k">name:</span> astronomy-shop
 <span class="k">repo:</span>
-  url: github.com/aryan-2255/SRE_agent
-  subdir: astronomy-shop
+  url: github.com/aryan-2255/opentelemetry-demo
 <span class="k">runtime:</span> { type: docker-compose }
 <span class="k">telemetry:</span>
   metrics: { type: prometheus }
@@ -654,7 +654,7 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; color: var(--mute
   </figure>
   <div class="cards">
     <div class="card"><h3>Nothing changes without a person</h3><ul><li>Changing tools are listed by name in each agent’s approval list. We never rely on a server’s “destructive” label alone.</li><li>Only team notifications are approved automatically.</li></ul></div>
-    <div class="card"><h3>Least access</h3><ul><li>The database tool accepts one <code>SELECT</code>, through a read-only role.</li><li>The GitHub token reaches only the team repo.</li><li>Agents never see secrets; the sandbox never holds any.</li></ul></div>
+    <div class="card"><h3>Least access</h3><ul><li>The database tool accepts one <code>SELECT</code>, through a read-only role.</li><li>The GitHub token reaches only the shop’s repo.</li><li>Agents never see secrets; the sandbox never holds any.</li></ul></div>
     <div class="card"><h3>Limits and a record</h3><ul><li>Run limits per agent, 24 steps and a cost cap per incident, then escalate.</li><li>Every tool call is recorded in TrueForge sessions and on the dashboard timeline.</li></ul></div>
   </div>
 </section>
@@ -683,7 +683,7 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; color: var(--mute
         <text class="cap" x="780" y="46">CLOUD</text>
         <rect class="box" x="780" y="62" width="300" height="56" rx="10"/><text class="t" x="796" y="86">Amazon Bedrock</text><text class="s" x="796" y="104">MiniMax M2.5 · Kimi K3</text>
         <rect class="box" x="780" y="130" width="300" height="56" rx="10"/><text class="t" x="796" y="154">Daytona</text><text class="s" x="796" y="172">sandboxes for the agents’ code</text>
-        <rect class="box" x="780" y="198" width="300" height="56" rx="10"/><text class="t" x="796" y="222">GitHub · aryan-2255/SRE_agent</text><text class="s" x="796" y="240">NightShift, the shop, the plan</text>
+        <rect class="box" x="780" y="198" width="300" height="56" rx="10"/><text class="t" x="796" y="222">GitHub</text><text class="s" x="796" y="240">shop repo: agents’ PRs · team repo: our code</text>
         <rect class="hum" x="780" y="266" width="300" height="56" rx="10"/><text class="t" x="796" y="290">Jira · SRE project</text><text class="s" x="796" y="308">incident tickets and approvals</text>
 
         <path class="ar" d="M340 270 H356"/>
@@ -746,9 +746,9 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; color: var(--mute
 <!-- START -->
 <section id="start">
   <span class="label">Run it</span>
-  <h2>One repo, four commands</h2>
+  <h2>Two repos, four commands</h2>
   <div class="two">
-<pre>git clone https://github.com/aryan-2255/SRE_agent.git truforge_hackthon
+<pre>git clone --recursive https://github.com/aryan-2255/SRE_agent.git truforge_hackthon
 cd truforge_hackthon/nightshift
 ./scripts/bootstrap.sh
 ./scripts/start-trueforge.sh
@@ -758,6 +758,7 @@ cd truforge_hackthon/nightshift
 ./.venv/bin/python scripts/mcp_call.py set_flag \
   '{"flag":"paymentFailure","variant":"50%"}'</pre>
     <ol class="steps">
+      <li><span class="n">00</span><span><b>aryan-2255/SRE_agent</b> is the team repo: NightShift, docs, plan. <b>aryan-2255/opentelemetry-demo</b> is the shop, linked into it as <code>astronomy-shop/</code>; the agents read its commits and open their PRs there.</span></li>
       <li><span class="n">01</span><span><code>bootstrap.sh</code> fills in paths, installs Python packages, and starts the shop and NightShift’s containers.</span></li>
       <li><span class="n">02</span><span>TrueForge opens at <code>localhost:8790</code>. Models, sandbox, GitHub and Jira are set once in its Settings.</span></li>
       <li><span class="n">03</span><span>The dashboard opens at <code>localhost:8090</code>. The watcher starts at once.</span></li>

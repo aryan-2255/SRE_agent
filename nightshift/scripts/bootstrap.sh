@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # One-time setup on a new machine. Safe to run again.
 #   ./scripts/bootstrap.sh
-# The repo holds nightshift/ and astronomy-shop/ side by side; run this from nightshift/.
+# The team repo holds nightshift/ and, as a submodule, astronomy-shop/ (the shop's own repo). Run from nightshift/.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
-SHOP=$(cd .. && pwd)/astronomy-shop   # the repo holds nightshift/ and astronomy-shop/ side by side
+SHOP=$(cd .. && pwd)/astronomy-shop   # the shop's own repo, next to nightshift/
 
 step() { printf "\n\033[1m== %s\033[0m\n" "$1"; }
 
 step "Shop fork"
 if [ ! -f "$SHOP/shop.sh" ]; then
-  echo "The shop folder is missing. Clone the whole repo: git clone https://github.com/aryan-2255/SRE_agent.git" >&2
-  exit 1
+  # the shop is its own repo (the fork), linked into the team repo as a submodule
+  (cd "$SHOP/.." && git submodule update --init astronomy-shop)
+  git -C "$SHOP" checkout -q main 2>/dev/null || true
 fi
 echo "shop at $SHOP"
 

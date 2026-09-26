@@ -6,17 +6,21 @@ About 20 minutes, most of it Docker downloading images. Written for a teammate j
 
 - macOS or Linux, **Docker Desktop with at least 10 GB of memory** (Settings → Resources) and about 20 GB of free disk
 - Node.js 22.14+ (for TrueForge) and Python 3.12+
-- Write access to `aryan-2255/SRE_agent` (ask Aryan to add you as a collaborator). It holds NightShift, the shop and the plan.
+- Write access to two repos (ask Aryan to add you as a collaborator on both):
+  - `aryan-2255/SRE_agent`: NightShift, the plan and docs, shared between teammates
+  - `aryan-2255/opentelemetry-demo`: the shop (the use case). The agents read its commits and open PRs there.
 - The secret values for `.env` and TrueForge. Get them from Aryan **privately** (a one-time secret link, never a group chat or git).
 
 ## 1. Get the code
 
-One repo holds everything: `nightshift/`, `astronomy-shop/` (the shop) and `plan/`:
+The team repo brings the shop with it (as a submodule):
 
 ```bash
-git clone https://github.com/aryan-2255/SRE_agent.git truforge_hackthon
+git clone --recursive https://github.com/aryan-2255/SRE_agent.git truforge_hackthon
 cd truforge_hackthon/nightshift
 ```
+
+Forgot `--recursive`? The bootstrap below fetches the shop for you.
 
 ## 2. Run the bootstrap
 
@@ -98,14 +102,16 @@ Within about a minute the dashboard shows an incident; the agents diagnose it an
 
 ## Working together
 
-Everything is one repo, so the normal loop covers NightShift, the shop and the plan:
+NightShift, the plan and docs live in `SRE_agent`. The shop is its own repo in `astronomy-shop/`.
 
 ```bash
-git pull                      # get your teammate's changes first
-# ...edit anything...
+git pull && git submodule update   # teammate's changes, plus the shop version they use
+# ...edit NightShift...
 git add -A && git commit -m "what you changed" && git push
-git log --stat                # who changed what
+git log --stat                     # who changed what
 ```
+
+Changing the shop's code: commit and push inside `astronomy-shop/` (that goes to aryan-2255/opentelemetry-demo), then in the team repo `git add astronomy-shop && git commit -m "Use new shop version" && git push`.
 
 ## Troubleshooting
 

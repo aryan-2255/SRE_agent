@@ -3,7 +3,7 @@
 This is Aryan's complete project folder, as-is:
 
 - `nightshift/`: NightShift (agents, ops MCP server, control, dashboard, scripts, `.env`)
-- `astronomy-shop/`: the shop NightShift watches and repairs (31 Docker containers)
+- `astronomy-shop/`: the shop NightShift watches and repairs (31 Docker containers). Its own repo: aryan-2255/opentelemetry-demo, where the agents open PRs.
 - `plan/`: the build plan
 - `nightshift/.data/trueforge.sqlite`: Aryan's TrueForge setup (Bedrock models, Daytona sandbox, GitHub, Jira, nightshift-ops, all 14 agents). `start-trueforge.sh` uses it automatically.
 

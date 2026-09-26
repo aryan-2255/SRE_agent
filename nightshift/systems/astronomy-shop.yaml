@@ -3,9 +3,8 @@
 name: astronomy-shop
 domain: e-commerce
 repo:
-  url: https://github.com/aryan-2255/SRE_agent   # the team repo; the shop lives in its astronomy-shop/ folder
+  url: https://github.com/aryan-2255/opentelemetry-demo   # the shop's own repo: agents read commits and open PRs here
   branch: main
-  subdir: astronomy-shop                          # service paths below are relative to this folder
   local_path: ../astronomy-shop
 runtime:
   type: docker-compose
