@@ -3,7 +3,6 @@ import { Toaster, toast } from "sonner";
 import { WarningOctagon, Signature, CheckCircle, XCircle } from "@phosphor-icons/react";
 import { engine } from "./engine/engine";
 import Header from "./components/Header";
-import StageRail from "./components/StageRail";
 import { Watcher, SyntheticCustomer, ToolTraffic, BlindBanner } from "./components/LeftColumn";
 import CenterStage from "./components/CenterStage";
 import { Approval, Conversation, Evidence } from "./components/RightColumn";
@@ -33,10 +32,9 @@ export default function App() {
   }, []);
 
   return (
-    <div className="grid h-full grid-rows-[64px_auto_46px_minmax(0,1fr)_auto] overflow-hidden">
+    <div className="grid h-full grid-rows-[64px_auto_minmax(0,1fr)_auto] overflow-hidden">
       <Header onMenu={() => setDrawer(true)} />
       <BlindBanner />
-      <StageRail />
       <main className="grid min-h-0 grid-cols-[clamp(236px,16.5vw,330px)_minmax(0,1fr)_clamp(292px,21vw,420px)] gap-3 p-3 min-[1700px]:gap-4 min-[1700px]:p-4">
         <aside className="flex min-h-0 flex-col gap-3 min-[1700px]:gap-4">
           <Watcher />

@@ -238,7 +238,7 @@ export function Evidence() {
   const [focus] = useFocus();
   const items = focus ? s.evidence.filter((e) => e.stage === focus) : s.evidence;
   return (
-    <section className="panel flex min-h-[96px] flex-1 flex-col overflow-hidden">
+    <section className={`panel flex min-h-[96px] flex-1 flex-col overflow-hidden ${s.pending.length ? "[@media(max-height:899px)]:hidden" : ""}`}>
       <PanelHead icon={<Files size={18} />} title="Evidence" sub="Exactly what the agents read."
         right={<span className="font-mono text-[12.5px] text-dim">{items.length}</span>} />
       <div className="scroll min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3">

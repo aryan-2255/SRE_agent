@@ -1,6 +1,6 @@
 // The map keeps the geometry of the original dashboard: supervisor at the hub, agents on a ring, systems around it.
-export const VIEW = { w: 1200, h: 800 };
-export const HUB = { x: 600, y: 400 };
+export const VIEW = { w: 1300, h: 800 };
+export const HUB = { x: 650, y: 400 };
 export const RING = 282;
 export const NODE_R = 42;
 export const HUB_R = 64;
@@ -63,13 +63,15 @@ export const POS: Record<string, { x: number; y: number }> = {};
 POS.supervisor = HUB;
 
 export type SystemKey = "watcher" | "shop" | "human" | "github" | "sandbox" | "harness";
+// Systems sit in the corners and edges, clear of every agent and label (checked with a margin for larger fonts):
+// what agents read on the left, where changes are approved at the top, where code goes on the right.
 export const SYSTEMS: Record<SystemKey, { x: number; y: number; w: number; h: number; label: string; sub: string }> = {
-  watcher: { x: 24, y: 110, w: 204, h: 64, label: "Watcher", sub: "always on · no AI · ₹0" },
-  shop: { x: 24, y: 368, w: 204, h: 64, label: "Live system", sub: "logs · metrics · traces · docker" },
-  human: { x: 498, y: 14, w: 204, h: 64, label: "On-call · Jira", sub: "approves every change" },
-  github: { x: 972, y: 210, w: 204, h: 64, label: "GitHub", sub: "commits · branches · PRs" },
-  sandbox: { x: 972, y: 500, w: 204, h: 64, label: "Daytona sandbox", sub: "runs the agents’ code" },
-  harness: { x: 972, y: 716, w: 204, h: 64, label: "TrueForge harness", sub: "sub-agents · tool search" },
+  watcher: { x: 10, y: 14, w: 214, h: 60, label: "Watcher", sub: "always on · no AI · ₹0" },
+  shop: { x: 10, y: 726, w: 214, h: 60, label: "Live system", sub: "logs · metrics · traces" },
+  human: { x: 543, y: 14, w: 214, h: 60, label: "On-call · Jira", sub: "approves every change" },
+  github: { x: 1076, y: 14, w: 214, h: 60, label: "GitHub", sub: "commits · branches · PRs" },
+  sandbox: { x: 1076, y: 370, w: 214, h: 60, label: "Daytona sandbox", sub: "runs the agents’ code" },
+  harness: { x: 1076, y: 726, w: 214, h: 60, label: "TrueForge harness", sub: "runs every agent" },
 };
 
 export function nodePoint(id: string): { x: number; y: number } {

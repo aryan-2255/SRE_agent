@@ -226,11 +226,11 @@ export default function NetworkMap({ onHover }: { onHover?: (h: Hover) => void }
               style={{ fill: hot ? `color-mix(in oklab, ${tone} 12%, var(--panel-2))` : "var(--panel-2)",
                 stroke: hot ? tone : k === "watcher" ? "color-mix(in oklab, var(--go) 45%, transparent)" : "var(--line-2)",
                 strokeWidth: hot ? 1.6 : 1, transition: "fill 300ms, stroke 300ms" }} />
-            <g transform={`translate(${sy.x + 16}, ${sy.y + 20})`} style={{ color: hot ? tone : "var(--muted)" }}>
+            <g transform={`translate(${sy.x + 16}, ${sy.y + 18})`} style={{ color: hot ? tone : "var(--muted)" }}>
               <Icon size={24} weight={hot ? "fill" : "regular"} />
             </g>
-            <text x={sy.x + 50} y={sy.y + 28} fontSize={16 * Math.min(fk, 1.2)} fontWeight={600} style={{ fill: "var(--ink)" }}>{sy.label}</text>
-            <text x={sy.x + 50} y={sy.y + 47} fontSize={12.5 * Math.min(fk, 1.15)} style={{ fill: "var(--muted)" }}>{sy.sub}</text>
+            <text x={sy.x + 50} y={sy.y + 26} fontSize={16 * Math.min(fk, 1.05)} fontWeight={600} textLength={sy.label.length * 9.2 * Math.min(fk, 1.05) > sy.w - 62 ? sy.w - 62 : undefined} lengthAdjust="spacingAndGlyphs" style={{ fill: "var(--ink)" }}>{sy.label}</text>
+            <text x={sy.x + 50} y={sy.y + 45} fontSize={12.5 * Math.min(fk, 1.05)} textLength={sy.sub.length * 6.6 * Math.min(fk, 1.05) > sy.w - 62 ? sy.w - 62 : undefined} lengthAdjust="spacingAndGlyphs" style={{ fill: "var(--muted)" }}>{sy.sub}</text>
           </g>
         );
       })}

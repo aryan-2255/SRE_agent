@@ -310,7 +310,7 @@ export default function AgentPanel() {
     <AnimatePresence>
       {open && (
         <motion.aside key="agent-panel" role="dialog" aria-label={`${WHO[pinned!] || pinned} details`}
-          className="fixed top-[112px] right-3 bottom-3 z-30 flex w-[min(560px,40vw)] min-w-[420px] flex-col rounded-[18px] bg-panel"
+          className="fixed top-[76px] right-3 bottom-3 z-30 flex w-[min(560px,40vw)] min-w-[420px] flex-col rounded-[18px] bg-panel"
           style={{ boxShadow: "var(--shadow-lift)" }}
           initial={{ x: "105%" }} animate={{ x: 0 }} exit={{ x: "105%" }} transition={{ type: "spring", duration: 0.45, bounce: 0 }}>
           <div className="flex items-center gap-2 border-b border-line px-5 py-3">

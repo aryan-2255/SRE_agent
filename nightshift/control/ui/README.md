@@ -24,7 +24,6 @@ npm run build      # writes dist/, which FastAPI serves at http://localhost:8090
 | `src/components/NetworkMap.tsx` | The agent network (SVG). State rings, spokes, the approval link to on-call, and an imperative effects layer for pulses, flashes and talk lines. |
 | `src/components/CenterStage.tsx` | Map panel, legend, hover card, the "now" line. |
 | `src/components/Header.tsx` | Incident, status, elapsed, cost, mode, theme, replay (Space pauses), menu. |
-| `src/components/StageRail.tsx` | The 12 pipeline stages and progress. |
 | `src/components/LeftColumn.tsx` | Watcher services, synthetic customer, tool traffic. |
 | `src/components/RightColumn.tsx` | Approval card, conversation, evidence. |
 | `src/components/Timeline.tsx` | One lane per agent; block length is the exact time it worked. |
