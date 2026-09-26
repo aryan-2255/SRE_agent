@@ -26,7 +26,7 @@ services:
   cart:           { language: csharp,     path: src/cart,           slo: { max_error_pct: 5 } }
   product-catalog: { language: go,        path: src/product-catalog, slo: { max_error_pct: 5 } }
   agent:          { language: python,     path: src/agent,          slo: { max_error_pct: 35 }, depends_on: [product-catalog] }   # baseline ~17% errors
-watch: { window: 2m, for: 2m, demo_for: 30s, min_rps: 0.05, poll_seconds: 5 }
+watch: { window: 2m, for: 2m, demo_for: 30s, min_rps: 0.01, poll_seconds: 5 }
 autonomy:
   auto: [notify]               # internal team updates need no approval. Night mode adds: rollback, restart_service
   ask: [rollback, restart_service, scale_service, set_flag, deploy, deploy_canary, promote_canary, create_pull_request, merge_pull_request]

@@ -83,7 +83,8 @@ async def run(system_name: str = "astronomy-shop") -> None:
     need_s = _seconds(watch["demo_for"] if settings.DEMO_MODE else watch["for"])
     metric = system["telemetry"]["metrics"]["error_metric"]
     breach_since: dict[str, float] = {}
-    synth_fails, last_synth = 0, 0.0
+    synth_flows = ("add_to_cart", "checkout")
+    synth_fails, synth_runs, last_synth = {f: 0 for f in synth_flows}, 0, 0.0
     async with httpx.AsyncClient(timeout=10) as client:
         while True:
             try:
@@ -119,17 +120,21 @@ async def run(system_name: str = "astronomy-shop") -> None:
                             breach_since.pop(name, None)
 
                 # Synthetic customer every 30 s: catches bugs that return "success" with the wrong result.
+                # Alternates browsing (add to cart) with a real checkout, so payment bugs are caught even with little traffic.
                 if now - last_synth > 30:
                     last_synth = now
+                    flow = synth_flows[synth_runs % 2]
+                    synth_runs += 1
                     try:
-                        res = await ops_client.call("synthetic_check", {"flow": "add_to_cart"})
+                        res = await ops_client.call("synthetic_check", {"flow": flow})
                         latest["synthetic"] = res
-                        synth_fails = 0 if res.get("passed") else synth_fails + 1
-                        if synth_fails >= 2:
+                        synth_fails[flow] = 0 if res.get("passed") else synth_fails[flow] + 1
+                        if synth_fails[flow] >= 2:
                             step = res.get("failed_step") or {}
-                            open_incident(system, "frontend", f"Synthetic customer failed twice: {step.get('step')} {step.get('detail', '')}",
+                            where = "checkout" if flow == "checkout" else "frontend"
+                            open_incident(system, where, f"Synthetic customer failed twice: {step.get('step')} {step.get('detail', '')}",
                                           {"type": "synthetic", **res})
-                            synth_fails = 0
+                            synth_fails[flow] = 0
                     except Exception as e:  # noqa: BLE001
                         log.warning("synthetic check failed to run: %s", e)
 

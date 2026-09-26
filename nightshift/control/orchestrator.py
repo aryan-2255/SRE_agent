@@ -20,6 +20,24 @@ AGENTS = {
 }
 
 
+# Claims a model may not invent: each must match the result of a real tool call in the same stage.
+BACKED_CLAIMS = {"pr": ("pr_url", "create_pull_request"), "cicd": ("promoted", "promote_canary")}
+
+
+def unbacked_claim(stage: str, output: dict, tool_calls: list[dict]) -> str | None:
+    if stage not in BACKED_CLAIMS or not output.get(BACKED_CLAIMS[stage][0]):
+        return None
+    field, tool = BACKED_CLAIMS[stage]
+    value = output[field]
+    # the tool may be called directly or through TrueForge's call_tool wrapper
+    results = [c.get("result", "") for c in tool_calls if c["tool"] == tool or tool in c.get("args", "")]
+    if not results:
+        return f"you reported {field}={value!r} but never called {tool}. Call {tool} and report what it returns"
+    if isinstance(value, str) and not any(value in r for r in results):
+        return f"{field} {value!r} does not appear in the result of {tool}. Report the value it returned"
+    return None
+
+
 class Escalate(Exception):
     pass
 
@@ -56,10 +74,19 @@ class Pipeline:
         for tries in range(2):  # one retry if the answer is not valid JSON or the call failed
             try:
                 res = self.run_stage_impl.run(self.id, name, AGENTS[name], payload, self.auto)
+                problem = unbacked_claim(name, res.output, res.tool_calls)
+                if problem:
+                    raise StageError(problem, res.tool_calls)
                 break
             except (StageError, ValueError, json.JSONDecodeError) as e:
                 last_err = e
                 payload["retry_reason"] = f"Previous attempt failed: {e}. Answer with only the JSON object."
+                done = [c for c in getattr(e, "tool_calls", []) if '"error"' not in c.get("result", "")[:40]]
+                if done:
+                    payload["already_done"] = {
+                        "note": "The previous attempt was cut off after these tool calls succeeded. They took effect: "
+                                "do not repeat or undo them, continue from where they left off.",
+                        "tool_calls": [{"tool": c["tool"], "args": c.get("args", "")[:300], "result": c["result"][:400]} for c in done]}
                 bus.publish("stage.retry", f"{name} retrying: {e}", self.id, name)
         else:
             db.q("update stages set status='failed', ended_at=now(), output=%s where incident_id=%s and name=%s and status in ('running','waiting_approval')",
@@ -210,6 +237,10 @@ class Pipeline:
         if act in ("escalate", "finish"):
             if act == "finish" and not (self._ok("verify", "recovered") or self.inc.get("status") == "false_alarm"):
                 return "cannot finish before the service is verified as recovered"
+            if act == "finish" and "fix" in self.out and not self._ok("cicd", "promoted"):
+                left = [s for s in ("test", "pr", "review", "cicd") if s in moves]
+                if left:
+                    return f"the code fix is written but not shipped yet (next: {left[0]})"
             return None
         if act not in ("run", "ask", "send_back"):
             return f"unknown action {act!r}"

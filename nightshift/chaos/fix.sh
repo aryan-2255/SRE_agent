@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Put the shop back to healthy after a demo: flags off, baseline payment image, demo commit reverted.
+# Put the shop back to healthy after a demo: flags off, baseline payment image, payment code reset.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .env
@@ -8,8 +8,13 @@ for f in paymentFailure aiRunawayAgent emitRawPii; do
   ./.venv/bin/python scripts/mcp_call.py set_flag "{\"flag\":\"$f\",\"variant\":\"off\"}" >/dev/null || true
 done
 cd "$SHOP"
-if git log -1 --pretty=%s | grep -q "stricter amount validation"; then
-  git revert --no-edit HEAD >/dev/null && echo "Reverted the demo commit on main (push it with: git push origin main)"
+# payment's code goes back to what it was before any demo (the demo bug, an agent's fix, or your own change)
+BASE=$(git rev-parse -q --verify "demo/payment-bug^" || true)
+if [ -n "$BASE" ] && ! git diff --quiet "$BASE" HEAD -- src/payment; then
+  git checkout "$BASE" -- src/payment
+  git diff --name-only --diff-filter=A "$BASE" HEAD -- src/payment | xargs -r git rm -q --
+  git commit -qm "chore(demo): reset payment to its pre-demo code" -- src/payment
+  echo "Reset src/payment to its pre-demo code on main (push it with: git push origin main)"
 fi
 docker tag nightshift/payment:baseline ghcr.io/open-telemetry/demo:latest-payment
 docker compose -p astronomy-shop --env-file .env --env-file .env.override -f compose.yaml -f compose.full.yaml \

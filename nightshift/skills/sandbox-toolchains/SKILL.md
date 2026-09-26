@@ -20,7 +20,7 @@ git log --oneline -5 -- "$SERVICE_PATH"         # the recent commits you may be 
 
 | Language | Setup | Run tests |
 |---|---|---|
-| JavaScript / TypeScript (Node) | `pip install -q nodejs-wheel` then `node -v && npm -v` | `npm ci --ignore-scripts` then `node --test` (built-in runner, no extra deps) |
+| JavaScript / TypeScript (Node) | `cd /tmp && curl -fsSL https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.gz \| tar -xz && export PATH=/tmp/node-v22.14.0-linux-x64/bin:$PATH && node -v && npm -v` (use `.tar.gz`: the sandbox has no `xz`; do not use `nodejs-wheel`, its `npm` is broken). Put the `export PATH=...` at the start of every later command. | `npm ci --ignore-scripts` then `node --test` (built-in runner, no extra deps) |
 | Python | `python -m venv .v && . .v/bin/activate && pip install -q -r requirements.txt pytest` | `pytest -q` |
 | Go, C#, Java, Rust | Not available in this sandbox. Say so and reason from code and traces instead. | — |
 

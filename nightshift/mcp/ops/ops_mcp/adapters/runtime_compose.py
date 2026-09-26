@@ -180,7 +180,24 @@ class DockerComposeRuntime:
             raise ComposeError("Canary is wired for payment only (payment-lb).")
         tag = f"nightshift/{service}:{commit}"
         if not _run(["docker", "images", "-q", tag]):
-            raise ComposeError(f"No image {tag}. Build it first with deploy or the chaos prebuild script.")
+            # Build the merged commit's image without touching the running service.
+            if self.git("status", "--porcelain", "--untracked-files=no", "--", "."):
+                raise ComposeError("The shop folder has uncommitted changes. Commit or stash them before deploying.")
+            self._ensure_baseline(service)
+            self.git("fetch", "--quiet", "origin")
+            head = self.git("rev-parse", "--short", "HEAD")
+            try:
+                self.git("merge", "--ff-only", commit)
+            except ComposeError:
+                raise ComposeError(f"Cannot move main to {commit}: it is not ahead of main ({head}). After a merged PR, "
+                                   f"pass the merge commit sha from merge_pull_request, not the PR's head commit.") from None
+            commit = self.git("rev-parse", "--short", "HEAD")
+            tag = f"nightshift/{service}:{commit}"
+            if not _run(["docker", "images", "-q", tag]):
+                live = _run(["docker", "inspect", "-f", "{{.Image}}", service])
+                self.compose("build", service, timeout=1200)
+                _run(["docker", "tag", self.compose_image(service), tag])
+                _run(["docker", "tag", live, self.compose_image(service)])  # the live service keeps its image
         env = _run(["docker", "inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", service]).splitlines()
         _run(["docker", "rm", "-f", "payment-canary"]) if _run(["docker", "ps", "-aq", "-f", "name=^payment-canary$"]) else None
         cmd = ["docker", "run", "-d", "--name", "payment-canary", "--network", "opentelemetry-demo",

@@ -26,7 +26,9 @@ class StageResult:
 
 
 class StageError(RuntimeError):
-    pass
+    def __init__(self, message: str, tool_calls: list[dict] | None = None):
+        super().__init__(message)
+        self.tool_calls = tool_calls or []  # what the failed attempt already did, so a retry can continue from there
 
 
 def _dump(obj) -> dict:
@@ -135,7 +137,8 @@ class TrueForgeRunner:
                         args = _dump(tool_calls_by_id[call_id]).get("function", {}).get("arguments", "") if call_id in tool_calls_by_id else ""
                         bus.publish("tool.call", f"Called {name}", incident_id, stage, {"tool": name, "args": _short(args, 800)})
                     text = _tool_text(d.get("content"))
-                    calls.append({"tool": name, "result": _short(text, 2000)})
+                    full_args = _dump(tool_calls_by_id[call_id]).get("function", {}).get("arguments", "") if call_id in tool_calls_by_id else ""
+                    calls.append({"tool": name, "args": _short(full_args, 500), "result": _short(text, 2000)})
                     bus.publish("tool.result", f"{name} returned", incident_id, stage,
                                 {"tool": name, "result": _short(text, 1500)})
                     if name in EVIDENCE_SOURCES:
@@ -151,14 +154,14 @@ class TrueForgeRunner:
                     done = ev
 
             if done is None:
-                raise StageError("TrueForge stream ended without turn.done")
+                raise StageError("TrueForge stream ended without turn.done", calls)
             state = _dump(done).get("state", {})
             m = state.get("metrics") or {}
             reported_cost = float(m.get("total_cost_in_usd") or 0)
             total_cost += reported_cost or settings.estimate_cost(
                 self._model(agent), int(m.get("total_input_tokens") or 0), int(m.get("total_output_tokens") or 0))
             if state.get("status") != "done":
-                raise StageError(f"turn {state.get('status')}: {state.get('message') or state.get('reason')}")
+                raise StageError(f"turn {state.get('status')}: {state.get('message') or state.get('reason')}", calls)
 
             required = state.get("required_actions") or []
             if not required:
