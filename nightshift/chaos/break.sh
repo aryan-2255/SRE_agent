@@ -14,7 +14,7 @@ flag() { ./.venv/bin/python scripts/mcp_call.py set_flag "{\"flag\":\"$1\",\"var
 case "${1:-}" in
   payment-bug)
     cd "$SHOP"
-    git diff --quiet || { echo "Shop repo has uncommitted changes" >&2; exit 1; }
+    git diff --quiet -- . || { echo "The shop folder has uncommitted changes" >&2; exit 1; }
     git cherry-pick -x "$(git rev-parse demo/payment-bug)" >/dev/null
     SHA=$(git rev-parse --short HEAD)
     [ "${2:-}" = "--no-push" ] || git push -q origin main
