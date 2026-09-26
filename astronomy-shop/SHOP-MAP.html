@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Astronomy Shop Map</title>
+<style>
+:root{
+  --bg:#F3F5F7; --host:#FFFFFF; --ink:#14212C; --muted:#5A6876; --line:#C9D2DB;
+  --shop:#E6F0FA; --shop-b:#2F6FB0; --data:#FBF0DF; --data-b:#A8600E;
+  --ai:#F1E9FB; --ai-b:#7446B5; --mon:#E4F4EC; --mon-b:#1E7A4C; --help:#EEF0F2; --help-b:#65717D;
+  --door:#FFF7D6; --door-b:#9A7A00; --fix:#DFF3F1; --fix-b:#0B7A70;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0F161D; --host:#141D26; --ink:#E4EAF0; --muted:#98A6B4; --line:#2C3A47;
+    --shop:#132436; --shop-b:#6AA8E8; --data:#2E2212; --data-b:#E8A452;
+    --ai:#231A33; --ai-b:#B18AE8; --mon:#122A1F; --mon-b:#5CC994; --help:#1C242C; --help-b:#9AA7B3;
+    --door:#2B2710; --door-b:#E0C24A; --fix:#10302D; --fix-b:#4FC7BB; color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans);padding:28px 18px 60px}
+.wrap{max-width:1240px;margin:0 auto;display:grid;gap:34px}
+h1{font-size:34px;margin:0;line-height:1.15}
+h2{font-size:22px;margin:0 0 4px}
+p{margin:0;max-width:78ch}
+.muted{color:var(--muted)}
+code{font-family:var(--mono);font-size:.9em}
+.eyebrow{font:600 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+/* the big host box */
+.host{background:var(--host);border:3px solid var(--ink);border-radius:18px;padding:22px;display:grid;gap:20px;position:relative}
+.host-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline}
+.host-head b{font-size:19px}
+.net{font:600 12px var(--mono);color:var(--muted)}
+
+.group{border:2px dashed var(--gb);background:var(--gbg);border-radius:14px;padding:16px;display:grid;gap:12px}
+.group-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
+.group-head b{font-size:16px;color:var(--ink)}
+.group-head span{font-size:13.5px;color:var(--muted)}
+.g-door{--gb:var(--door-b);--gbg:var(--door)}
+.g-shop{--gb:var(--shop-b);--gbg:var(--shop)}
+.g-data{--gb:var(--data-b);--gbg:var(--data)}
+.g-ai{--gb:var(--ai-b);--gbg:var(--ai)}
+.g-mon{--gb:var(--mon-b);--gbg:var(--mon)}
+.g-help{--gb:var(--help-b);--gbg:var(--help)}
+.g-fix{--gb:var(--fix-b);--gbg:var(--fix)}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.c{background:var(--host);border:1.5px solid var(--gb);border-radius:10px;padding:11px 12px;display:grid;gap:5px;align-content:start}
+.c .top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.c .name{font:700 14px var(--mono)}
+.c .lang{font:600 11px var(--mono);color:var(--gb);white-space:nowrap}
+.c .what{font-size:13.5px}
+.c .meta{font:12px var(--mono);color:var(--muted);display:grid;gap:1px}
+.tag{display:inline-block;font:700 10.5px var(--mono);padding:2px 6px;border-radius:5px;background:var(--fix);color:var(--fix-b);border:1px solid var(--fix-b);justify-self:start}
+
+.flow{background:var(--host);border:1px solid var(--line);border-radius:14px;padding:14px;overflow-x:auto}
+.flow svg{display:block;width:100%;min-width:900px;height:auto;color:var(--ink)}
+svg .b{fill:var(--host);stroke:var(--line);stroke-width:1.4}
+svg .bd{fill:var(--door);stroke:var(--door-b);stroke-width:1.6}
+svg .bs{fill:var(--shop);stroke:var(--shop-b);stroke-width:1.4}
+svg .bdata{fill:var(--data);stroke:var(--data-b);stroke-width:1.4}
+svg .bm{fill:var(--mon);stroke:var(--mon-b);stroke-width:1.4}
+svg .bf{fill:var(--fix);stroke:var(--fix-b);stroke-width:1.8}
+svg .t{font:700 13px var(--mono);fill:currentColor}
+svg .s{font:12px var(--sans);fill:var(--muted)}
+svg .e{fill:none;stroke:currentColor;stroke-width:1.4;marker-end:url(#a)}
+svg .ef{fill:none;stroke:var(--fix-b);stroke-width:1.8;stroke-dasharray:6 4;marker-end:url(#af)}
+svg .l{font:11.5px var(--mono);fill:var(--muted)}
+svg .lf{font:700 11.5px var(--mono);fill:var(--fix-b)}
+
+table{border-collapse:collapse;width:100%;font-size:14px}
+.tbl{overflow-x:auto;background:var(--host);border:1px solid var(--line);border-radius:12px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11.5px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.box{background:var(--host);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:8px;align-content:start}
+.box ul,.box ol{margin:0;padding-left:20px;display:grid;gap:5px}
+pre{margin:0;background:var(--host);border:1px solid var(--line);border-radius:10px;padding:12px;overflow-x:auto;font:12.5px/1.55 var(--mono)}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header style="display:grid;gap:10px">
+  <div class="eyebrow">The system NightShift watches and repairs</div>
+  <h1>Astronomy Shop, container by container</h1>
+  <p class="muted">An online telescope shop made of 31 Docker containers. Each box below is one container, built from its own folder under <code>src/</code>. They all run on one machine (your laptop now, the AWS VM later) and talk over one Docker network. Start everything with <code>./shop.sh start</code>.</p>
+</header>
+
+<!-- REQUEST + SIGNAL FLOW -->
+<section style="display:grid;gap:10px">
+  <h2>How one purchase flows, and where the signals go</h2>
+  <div class="flow">
+    <svg viewBox="0 0 1180 400" role="img" aria-label="A shopper enters through frontend-proxy on port 8080, reaches the frontend, which calls cart, product-catalog and checkout. Checkout calls payment, shipping and email and publishes the order to Kafka, where accounting and fraud-detection read it. Every service sends logs, metrics and traces to the OpenTelemetry collector, which stores traces in Jaeger, metrics in Prometheus and logs in OpenSearch. NightShift's ops MCP container reads those stores and controls Docker and flagd.">
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+        <marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--fix-b)"/></marker>
+      </defs>
+      <rect class="b" x="10" y="40" width="120" height="54" rx="8"/><text class="t" x="70" y="63" text-anchor="middle">Shopper</text><text class="s" x="70" y="81" text-anchor="middle">browser / bots</text>
+      <path class="e" d="M130 67 H166"/>
+      <rect class="bd" x="170" y="40" width="150" height="54" rx="8"/><text class="t" x="245" y="63" text-anchor="middle">frontend-proxy</text><text class="s" x="245" y="81" text-anchor="middle">the only door · :8080</text>
+      <path class="e" d="M320 67 H356"/>
+      <rect class="bs" x="360" y="40" width="130" height="54" rx="8"/><text class="t" x="425" y="63" text-anchor="middle">frontend</text><text class="s" x="425" y="81" text-anchor="middle">web store</text>
+      <path class="e" d="M490 55 H540 V30 H566"/><path class="e" d="M490 67 H566"/><path class="e" d="M490 79 H540 V104 H566"/>
+      <rect class="bs" x="570" y="10" width="130" height="40" rx="8"/><text class="t" x="635" y="35" text-anchor="middle">cart</text>
+      <rect class="bs" x="570" y="54" width="130" height="28" rx="8"/><text class="t" x="635" y="73" text-anchor="middle">product-catalog</text>
+      <rect class="bs" x="570" y="86" width="130" height="40" rx="8"/><text class="t" x="635" y="111" text-anchor="middle">checkout</text>
+      <path class="e" d="M700 30 H736"/><rect class="bdata" x="740" y="12" width="120" height="36" rx="8"/><text class="t" x="800" y="35" text-anchor="middle">valkey-cart</text>
+      <path class="e" d="M700 68 H736" /><rect class="bdata" x="740" y="52" width="120" height="32" rx="8"/><text class="t" x="800" y="73" text-anchor="middle">astronomy-db</text>
+      <path class="e" d="M700 106 H736"/>
+      <rect class="bs" x="740" y="90" width="220" height="36" rx="8"/><text class="t" x="850" y="113" text-anchor="middle">payment · shipping · email</text>
+      <path class="e" d="M635 126 V160 H736"/><text class="l" x="643" y="150">order event</text>
+      <rect class="bdata" x="740" y="144" width="90" height="34" rx="8"/><text class="t" x="785" y="166" text-anchor="middle">kafka</text>
+      <path class="e" d="M830 161 H866"/>
+      <rect class="bs" x="870" y="144" width="230" height="34" rx="8"/><text class="t" x="985" y="166" text-anchor="middle">accounting · fraud-detection</text>
+
+      <!-- telemetry -->
+      <line x1="10" y1="212" x2="1170" y2="212" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 4"/>
+      <text class="l" x="14" y="232">every container above sends its logs, metrics and traces down here</text>
+      <path class="e" d="M425 94 V256"/>
+      <rect class="bm" x="330" y="260" width="150" height="54" rx="8"/><text class="t" x="405" y="283" text-anchor="middle">otel-collector</text><text class="s" x="405" y="301" text-anchor="middle">receives everything</text>
+      <path class="e" d="M480 272 H566"/><text class="l" x="523" y="266" text-anchor="middle">traces</text>
+      <path class="e" d="M480 287 H496 V324 H566"/><text class="l" x="506" y="318">metrics</text>
+      <path class="e" d="M480 302 H488 V370 H566"/><text class="l" x="506" y="364">logs</text>
+      <rect class="bm" x="570" y="252" width="140" height="36" rx="8"/><text class="t" x="640" y="275" text-anchor="middle">jaeger</text>
+      <rect class="bm" x="570" y="306" width="140" height="36" rx="8"/><text class="t" x="640" y="329" text-anchor="middle">prometheus</text>
+      <rect class="bm" x="570" y="352" width="140" height="36" rx="8"/><text class="t" x="640" y="375" text-anchor="middle">opensearch</text>
+      <path class="e" d="M710 324 H756"/><text class="l" x="733" y="316" text-anchor="middle">shows</text>
+      <rect class="bm" x="760" y="306" width="110" height="36" rx="8"/><text class="t" x="815" y="329" text-anchor="middle">grafana</text>
+
+      <!-- nightshift -->
+      <rect class="bf" x="930" y="250" width="240" height="140" rx="10"/>
+      <text class="t" x="946" y="274">nightshift-ops</text>
+      <text class="s" x="946" y="293">(we add this container tomorrow)</text>
+      <text class="s" x="946" y="316">reads jaeger · prometheus · opensearch</text>
+      <text class="s" x="946" y="336">controls Docker: rebuild · rollback</text>
+      <text class="s" x="946" y="356">controls flagd: failure switches</text>
+      <text class="s" x="946" y="376">TrueForge agents connect here</text>
+      <path class="ef" d="M710 270 H900 V290 H926"/><text class="lf" x="800" y="262" text-anchor="middle">reads signals</text>
+      <path class="ef" d="M710 370 H900 V360 H926"/>
+    </svg>
+  </div>
+</section>
+
+<!-- THE HOST -->
+<section class="host" aria-label="All containers on one Docker host">
+  <div class="host-head">
+    <b>🖥  One machine running Docker &nbsp;·&nbsp; laptop today, AWS VM tomorrow</b>
+    <span class="net">docker network: opentelemetry-demo · 31 containers</span>
+  </div>
+
+  <div class="group g-door">
+    <div class="group-head"><b>The front door</b><span>The only container with a public port. Every page on :8080 goes through it.</span></div>
+    <div class="cards">
+      <div class="c"><div class="top"><span class="name">frontend-proxy</span><span class="lang">Envoy</span></div><div class="what">Routes <code>/</code> to the shop and <code>/grafana</code>, <code>/jaeger</code>, <code>/loadgen</code>, <code>/feature</code>, <code>/chatbot</code> to their tools.</div><div class="meta"><span>src/frontend-proxy</span><span>port 8080</span></div></div>
+    </div>
+  </div>
+
+  <div class="group g-shop">
+    <div class="group-head"><b>Shop services</b><span>The business. Each is written in a different language, like a real company that grew over years.</span></div>
+    <div class="cards">
+      <div class="c"><div class="top"><span class="name">frontend</span><span class="lang">TypeScript · Next.js</span></div><div class="what">The web store and its API. Add to cart lives here.</div><div class="meta"><span>src/frontend</span><span>calls almost every service</span></div><span class="tag">AGENT CAN FIX CODE</span></div>
+      <div class="c"><div class="top"><span class="name">payment</span><span class="lang">Node.js</span></div><div class="what">Charges the card (simulated).</div><div class="meta"><span>src/payment</span><span>called by checkout</span></div><span class="tag">AGENT CAN FIX CODE</span></div>
+      <div class="c"><div class="top"><span class="name">recommendation</span><span class="lang">Python</span></div><div class="what">“You may also like” products.</div><div class="meta"><span>src/recommendation</span><span>calls product-catalog</span></div><span class="tag">AGENT CAN FIX CODE</span></div>
+      <div class="c"><div class="top"><span class="name">checkout</span><span class="lang">Go</span></div><div class="what">Places the order: cart, currency, payment, shipping, email, then sends an order event to Kafka.</div><div class="meta"><span>src/checkout</span></div></div>
+      <div class="c"><div class="top"><span class="name">cart</span><span class="lang">C# · .NET</span></div><div class="what">Keeps each shopper’s cart.</div><div class="meta"><span>src/cart</span><span>stores in valkey-cart</span></div></div>
+      <div class="c"><div class="top"><span class="name">product-catalog</span><span class="lang">Go</span></div><div class="what">The product list and details.</div><div class="meta"><span>src/product-catalog</span><span>reads astronomy-db</span></div></div>
+      <div class="c"><div class="top"><span class="name">currency</span><span class="lang">C++</span></div><div class="what">Converts prices between currencies.</div><div class="meta"><span>src/currency</span></div></div>
+      <div class="c"><div class="top"><span class="name">shipping</span><span class="lang">Rust</span></div><div class="what">Shipping options and delivery.</div><div class="meta"><span>src/shipping</span><span>calls quote</span></div></div>
+      <div class="c"><div class="top"><span class="name">quote</span><span class="lang">PHP</span></div><div class="what">Calculates the shipping cost.</div><div class="meta"><span>src/quote</span></div></div>
+      <div class="c"><div class="top"><span class="name">email</span><span class="lang">Ruby</span></div><div class="what">Order confirmation email (simulated).</div><div class="meta"><span>src/email</span></div></div>
+      <div class="c"><div class="top"><span class="name">ad</span><span class="lang">Java</span></div><div class="what">Shows ads on the store pages.</div><div class="meta"><span>src/ad</span></div></div>
+      <div class="c"><div class="top"><span class="name">accounting</span><span class="lang">C# · .NET</span></div><div class="what">Reads every order from Kafka and records it.</div><div class="meta"><span>src/accounting</span></div></div>
+      <div class="c"><div class="top"><span class="name">fraud-detection</span><span class="lang">Kotlin</span></div><div class="what">Reads every order from Kafka and checks it for fraud.</div><div class="meta"><span>src/fraud-detection</span></div></div>
+      <div class="c"><div class="top"><span class="name">image-provider</span><span class="lang">nginx</span></div><div class="what">Serves the product pictures.</div><div class="meta"><span>src/image-provider</span></div></div>
+    </div>
+  </div>
+
+  <div class="two">
+    <div class="group g-data">
+      <div class="group-head"><b>Data, messaging, switches</b><span>Where state lives.</span></div>
+      <div class="cards">
+        <div class="c"><div class="top"><span class="name">astronomy-db</span><span class="lang">PostgreSQL 18</span></div><div class="what">Product database.</div></div>
+        <div class="c"><div class="top"><span class="name">valkey-cart</span><span class="lang">Valkey (Redis)</span></div><div class="what">Cart storage.</div></div>
+        <div class="c"><div class="top"><span class="name">kafka</span><span class="lang">Kafka</span></div><div class="what">Order events queue.</div><div class="meta"><span>src/kafka</span></div></div>
+        <div class="c"><div class="top"><span class="name">flagd</span><span class="lang">OpenFeature</span></div><div class="what">18 failure switches that break things on purpose.</div><div class="meta"><span>src/flagd/demo.flagd.json</span></div></div>
+      </div>
+    </div>
+    <div class="group g-ai">
+      <div class="group-head"><b>AI shopping assistant</b><span>An AI agent inside the shop.</span></div>
+      <div class="cards">
+        <div class="c"><div class="top"><span class="name">agent</span><span class="lang">Python · LangGraph</span></div><div class="what">Answers shopper questions using shop tools. Replays recorded LLM answers, so no API key.</div><div class="meta"><span>src/agent</span></div><span class="tag">AGENT CAN FIX CODE</span></div>
+        <div class="c"><div class="top"><span class="name">chatbot</span><span class="lang">Python</span></div><div class="what">The chat page at <code>/chatbot</code>.</div><div class="meta"><span>src/chatbot</span></div></div>
+        <div class="c"><div class="top"><span class="name">mcp</span><span class="lang">Python</span></div><div class="what">Gives the assistant its shop tools.</div><div class="meta"><span>src/mcp</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="group g-mon">
+    <div class="group-head"><b>Monitoring</b><span>Collects and stores every signal. This is where NightShift looks.</span></div>
+    <div class="cards">
+      <div class="c"><div class="top"><span class="name">otel-collector</span><span class="lang">OpenTelemetry</span></div><div class="what">Receives logs, metrics and traces from every container and sends each to its store.</div><div class="meta"><span>src/otel-collector</span></div></div>
+      <div class="c"><div class="top"><span class="name">prometheus</span><span class="lang">metrics</span></div><div class="what">Numbers over time: error rate, latency, memory.</div><div class="meta"><span>port 9090</span></div></div>
+      <div class="c"><div class="top"><span class="name">opensearch</span><span class="lang">logs</span></div><div class="what">Every log line, searchable.</div></div>
+      <div class="c"><div class="top"><span class="name">jaeger</span><span class="lang">traces</span></div><div class="what">One request’s path across services.</div><div class="meta"><span>/jaeger/ui</span></div></div>
+      <div class="c"><div class="top"><span class="name">grafana</span><span class="lang">dashboards</span></div><div class="what">The screen people look at.</div><div class="meta"><span>/grafana</span></div></div>
+      <div class="c"><div class="top"><span class="name">opamp-server</span><span class="lang">Go</span></div><div class="what">Manages the collector’s settings.</div></div>
+    </div>
+  </div>
+
+  <div class="group g-help">
+    <div class="group-head"><b>Helpers</b><span>Make the demo feel real.</span></div>
+    <div class="cards">
+      <div class="c"><div class="top"><span class="name">load-generator</span><span class="lang">Python · Locust</span></div><div class="what">Fake shoppers browsing and buying all the time.</div><div class="meta"><span>/loadgen</span></div></div>
+      <div class="c"><div class="top"><span class="name">flagd-ui</span><span class="lang">Elixir</span></div><div class="what">The page where you flip failure switches.</div><div class="meta"><span>/feature</span></div></div>
+      <div class="c"><div class="top"><span class="name">telemetry-docs</span><span class="lang">docs</span></div><div class="what">Reference for every signal the shop emits.</div><div class="meta"><span>/telemetry</span></div></div>
+    </div>
+  </div>
+
+  <div class="group g-fix">
+    <div class="group-head"><b>Added by NightShift (tomorrow)</b><span>The one container the agents talk to.</span></div>
+    <div class="cards">
+      <div class="c"><div class="top"><span class="name">nightshift-ops</span><span class="lang">Python · MCP</span></div><div class="what">Reads Prometheus, OpenSearch and Jaeger. Rebuilds, rolls back and restarts containers. Flips flags. Every change waits for approval.</div><div class="meta"><span>nightshift repo · mcp/ops</span><span>HTTPS + token</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- UNIVERSAL -->
+<section class="two">
+  <div class="box">
+    <h2>How NightShift finds and fixes problems here</h2>
+    <ol>
+      <li><b>Find:</b> error rate and latency in Prometheus cross a threshold.</li>
+      <li><b>Explain:</b> the error lines in OpenSearch and the failing trace in Jaeger point to one container.</li>
+      <li><b>Blame:</b> GitHub shows which commit changed that container’s <code>src/</code> folder.</li>
+      <li><b>Prove:</b> the sandbox clones this repo and reproduces the bug with a test.</li>
+      <li><b>Fix:</b> rebuild only that one container, or roll it back to its last good image.</li>
+      <li><b>Check:</b> Prometheus shows the error rate back to normal.</li>
+    </ol>
+  </div>
+  <div class="box">
+    <h2>Why this works for any system</h2>
+    <p>NightShift doesn’t depend on this shop. It needs three things, and every system has them:</p>
+    <ul>
+      <li><b>Signals:</b> somewhere with logs, metrics and traces. Here that’s OpenSearch, Prometheus and Jaeger. Elsewhere it could be Datadog, CloudWatch or Grafana Cloud.</li>
+      <li><b>Controls:</b> a way to deploy and roll back. Here that’s Docker Compose. Elsewhere it could be Vercel, Render or AWS.</li>
+      <li><b>Code:</b> a GitHub repo, like this fork.</li>
+    </ul>
+    <p class="muted">Only the adapters inside <code>nightshift-ops</code> change. The agents stay the same.</p>
+  </div>
+</section>
+
+<!-- LINKS + COMMANDS -->
+<section class="two">
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Open</th><th>Address</th></tr></thead>
+      <tbody>
+        <tr><td>The shop</td><td><code>http://localhost:8080</code></td></tr>
+        <tr><td>Grafana dashboards</td><td><code>http://localhost:8080/grafana/</code></td></tr>
+        <tr><td>Jaeger traces</td><td><code>http://localhost:8080/jaeger/ui</code></td></tr>
+        <tr><td>Failure switches</td><td><code>http://localhost:8080/feature/</code></td></tr>
+        <tr><td>Fake shoppers</td><td><code>http://localhost:8080/loadgen/</code></td></tr>
+        <tr><td>AI assistant</td><td><code>http://localhost:8080/chatbot/</code></td></tr>
+        <tr><td>Prometheus</td><td><code>http://localhost:9090</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+<pre>./shop.sh start           # start all 31 containers
+./shop.sh status          # health + memory of each
+./shop.sh logs payment    # follow one container's logs
+./shop.sh rebuild payment # rebuild from src/payment, restart it
+./shop.sh stop            # stop everything</pre>
+</section>
+
+<section class="tbl">
+  <table>
+    <thead><tr><th>Failure switch (flagd)</th><th>What breaks</th><th>Container</th></tr></thead>
+    <tbody>
+      <tr><td><code>aiRunawayAgent</code></td><td>AI assistant loops on tool calls: cost and latency spike</td><td>agent</td></tr>
+      <tr><td><code>paymentFailure</code></td><td>A share of card charges fail</td><td>payment</td></tr>
+      <tr><td><code>paymentUnreachable</code></td><td>Payment is down</td><td>payment</td></tr>
+      <tr><td><code>cartFailure</code></td><td>Cart fails some of the time</td><td>cart</td></tr>
+      <tr><td><code>productCatalogLockContention</code></td><td>Database locks slow product pages</td><td>product-catalog, astronomy-db</td></tr>
+      <tr><td><code>productCatalogFailure</code></td><td>One product fails to load</td><td>product-catalog</td></tr>
+      <tr><td><code>emitRawPii</code></td><td>Card numbers and emails leak into telemetry</td><td>checkout, payment</td></tr>
+      <tr><td><code>kafkaQueueProblems</code></td><td>Order queue lag spike</td><td>kafka</td></tr>
+      <tr><td><code>emailMemoryLeak</code></td><td>Memory grows until crash</td><td>email</td></tr>
+      <tr><td><code>recommendationCacheFailure</code></td><td>Recommendation cache breaks</td><td>recommendation</td></tr>
+      <tr><td><code>adHighCpu</code> · <code>adFailure</code> · <code>adManualGc</code></td><td>Ad service CPU, errors, pauses</td><td>ad</td></tr>
+      <tr><td><code>imageSlowLoad</code></td><td>Pictures load slowly</td><td>image-provider</td></tr>
+      <tr><td><code>aiSlowResponse</code></td><td>AI assistant answers slowly</td><td>agent</td></tr>
+      <tr><td><code>failedReadinessProbe</code> · <code>intlShippingSlowdown</code> · <code>loadGeneratorFloodHomepage</code></td><td>Health check fails · overseas shipping slow · traffic flood</td><td>cart · shipping · frontend</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<footer class="muted" style="font-size:13px">Source: OpenTelemetry Demo (Apache-2.0), github.com/open-telemetry/opentelemetry-demo. “AGENT CAN FIX CODE” marks services in Python or Node.js, which NightShift’s sandbox can build and test.</footer>
+</div>
+</body>
+</html>

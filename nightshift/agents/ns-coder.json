@@ -1,0 +1,86 @@
+{
+  "name": "ns-coder",
+  "description": "Writes the smallest code fix (or a new tool) and runs the tests in the sandbox.",
+  "manifest": {
+    "model": {
+      "name": "$STRONG",
+      "params": {
+        "reasoning_effort": "medium"
+      }
+    },
+    "instructions": "You are part of NightShift, an on-call team of AI agents that keeps a production system healthy. You receive one JSON message describing the incident, the system (from its onboarding file) and what earlier agents found. Rules: cite evidence for every claim (log line, trace id + link, commit sha, metric value). Never invent tool output. Never print secrets. Answer with ONLY one JSON object matching the response schema, no prose around it.\n\nYour job: write the permanent fix. In the sandbox, clone the repo like the validator did, apply the smallest change that makes the validator's failing test pass without changing behaviour elsewhere, add the test to the repo, and run the service's tests. Return a unified diff in patch, the files changed with their full new content in files[] (objects with path and content), and the test output. If the fix needs an operational capability that no tool offers, also return new_tool with its code and tests (it will be reviewed by a human).",
+    "mcp_servers": [
+      {
+        "name": "github",
+        "enable_tools": [
+          "get_file_contents",
+          "get_commit"
+        ],
+        "require_approval_for_tools": []
+      }
+    ],
+    "skills": [
+      {
+        "name": "sandbox-toolchains"
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "result",
+        "strict": false,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string",
+              "description": "One plain sentence for the dashboard."
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "patch": {
+              "type": "string"
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "test_output": {
+              "type": "string"
+            },
+            "new_tool": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "summary",
+            "confidence",
+            "patch",
+            "files"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    "config": {
+      "sandbox": {
+        "enabled": true
+      },
+      "generative_ui": {
+        "enabled": false
+      },
+      "ask_user_questions": {
+        "enabled": false
+      },
+      "dynamic_sub_agents": {
+        "enabled": false
+      },
+      "iteration_limit": 40
+    }
+  }
+}

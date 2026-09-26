@@ -1,0 +1,11 @@
+# control service, scripts and the dashboard API (Python 3.12+)
+trueforge-sdk==0.2.0
+mcp==1.30.0
+fastapi==0.141.1
+uvicorn[standard]==0.54.0
+sse-starlette==3.4.11
+httpx==0.28.1
+PyYAML==6.0.3
+psycopg[binary]==3.3.6
+psycopg-pool==3.3.3
+redis==8.1.0

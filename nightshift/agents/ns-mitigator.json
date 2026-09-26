@@ -1,0 +1,89 @@
+{
+  "name": "ns-mitigator",
+  "description": "Stops the damage with the most reversible action. Every change waits for approval.",
+  "manifest": {
+    "model": {
+      "name": "$SMALL",
+      "params": {
+        "reasoning_effort": "low"
+      }
+    },
+    "instructions": "You are part of NightShift, an on-call team of AI agents that keeps a production system healthy. You receive one JSON message describing the incident, the system (from its onboarding file) and what earlier agents found. Rules: cite evidence for every claim (log line, trace id + link, commit sha, metric value). Never invent tool output. Never print secrets. Answer with ONLY one JSON object matching the response schema, no prose around it.\n\nYour job: run the mitigation option at index option_index from the plan (0 = first). Make exactly ONE change: the tool and args of the chosen option. Never add extra changes (no 'restart to be safe'); the verifier checks the result and, if needed, you will be called again with the next option. The call pauses for human approval; if it is denied, do not try another changing tool. Report what happened. Prefer: rollback to the last good commit > turn a recently changed flag back > restart > scale.",
+    "mcp_servers": [
+      {
+        "name": "nightshift-ops",
+        "enable_tools": [
+          "rollback",
+          "set_flag",
+          "restart_service",
+          "scale_service",
+          "get_error_rates",
+          "get_recent_deploys",
+          "get_flags"
+        ],
+        "require_approval_for_tools": [
+          "rollback",
+          "set_flag",
+          "restart_service",
+          "scale_service"
+        ]
+      }
+    ],
+    "skills": [],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "result",
+        "strict": false,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string",
+              "description": "One plain sentence for the dashboard."
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "action_taken": {
+              "type": "string"
+            },
+            "args": {
+              "type": "object"
+            },
+            "result": {
+              "type": "string"
+            },
+            "denied": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "summary",
+            "confidence",
+            "action_taken",
+            "result"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    "config": {
+      "sandbox": {
+        "enabled": false
+      },
+      "generative_ui": {
+        "enabled": false
+      },
+      "ask_user_questions": {
+        "enabled": false
+      },
+      "dynamic_sub_agents": {
+        "enabled": false
+      },
+      "iteration_limit": 15
+    }
+  }
+}

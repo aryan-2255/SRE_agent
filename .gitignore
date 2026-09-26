@@ -1,0 +1,21 @@
+# secrets and machine-specific files: never commit
+.env
+**/.env
+!**/.env.example
+# the shop's .env is its public default configuration (from the upstream project); it is needed to run
+!astronomy-shop/.env
+nightshift/.data/
+*.sqlite
+*.sqlite-*
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+.DS_Store
+.claude/
+*.zip
+
+# runtime state of the shop (deploy history, canary weights, flag backups)
+astronomy-shop/.nightshift/
+astronomy-shop/MY-ORDERS.html
+astronomy-shop/public-gate/shop-qr.png

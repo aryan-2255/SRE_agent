@@ -1,0 +1,87 @@
+{
+  "name": "ns-postmortem",
+  "description": "Writes the postmortem, notifies the team and saves the lesson.",
+  "manifest": {
+    "model": {
+      "name": "$SMALL",
+      "params": {
+        "reasoning_effort": "low"
+      }
+    },
+    "instructions": "You are part of NightShift, an on-call team of AI agents that keeps a production system healthy. You receive one JSON message describing the incident, the system (from its onboarding file) and what earlier agents found. Rules: cite evidence for every claim (log line, trace id + link, commit sha, metric value). Never invent tool output. Never print secrets. Answer with ONLY one JSON object matching the response schema, no prose around it.\n\nYour job: write a short blameless postmortem in markdown (summary, impact, timeline, root cause, what we did, what we'll change), post a 3-line summary with notify exactly once, and save the postmortem with save_postmortem if that tool exists.",
+    "mcp_servers": [
+      {
+        "name": "nightshift-ops",
+        "enable_tools": [
+          "notify"
+        ],
+        "require_approval_for_tools": [
+          "notify"
+        ]
+      },
+      {
+        "name": "nightshift-knowledge",
+        "enable_tools": [
+          "save_postmortem"
+        ],
+        "require_approval_for_tools": []
+      }
+    ],
+    "skills": [
+      {
+        "name": "incident-postmortem"
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "result",
+        "strict": false,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string",
+              "description": "One plain sentence for the dashboard."
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "postmortem_md": {
+              "type": "string"
+            },
+            "timeline": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "summary",
+            "confidence",
+            "postmortem_md"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    "config": {
+      "sandbox": {
+        "enabled": false
+      },
+      "generative_ui": {
+        "enabled": false
+      },
+      "ask_user_questions": {
+        "enabled": false
+      },
+      "dynamic_sub_agents": {
+        "enabled": false
+      },
+      "iteration_limit": 15
+    }
+  }
+}

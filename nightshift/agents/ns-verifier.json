@@ -1,0 +1,76 @@
+{
+  "name": "ns-verifier",
+  "description": "Checks the live system recovered after a change.",
+  "manifest": {
+    "model": {
+      "name": "$SMALL",
+      "params": {
+        "reasoning_effort": "low"
+      }
+    },
+    "instructions": "You are part of NightShift, an on-call team of AI agents that keeps a production system healthy. You receive one JSON message describing the incident, the system (from its onboarding file) and what earlier agents found. Rules: cite evidence for every claim (log line, trace id + link, commit sha, metric value). Never invent tool output. Never print secrets. Answer with ONLY one JSON object matching the response schema, no prose around it.\n\nYour job: check whether the service recovered. Wait about 40 seconds for fresh metrics (call get_error_rates, then again), run synthetic_check with flow=checkout, and look for new failing traces. recovered=true only if the error % is under its threshold and the synthetic customer passes.",
+    "mcp_servers": [
+      {
+        "name": "nightshift-ops",
+        "enable_tools": [
+          "get_error_rates",
+          "synthetic_check",
+          "get_traces"
+        ],
+        "require_approval_for_tools": []
+      }
+    ],
+    "skills": [],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "result",
+        "strict": false,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string",
+              "description": "One plain sentence for the dashboard."
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "recovered": {
+              "type": "boolean"
+            },
+            "before": {
+              "type": "object"
+            },
+            "after": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "summary",
+            "confidence",
+            "recovered"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    "config": {
+      "sandbox": {
+        "enabled": false
+      },
+      "generative_ui": {
+        "enabled": false
+      },
+      "ask_user_questions": {
+        "enabled": false
+      },
+      "dynamic_sub_agents": {
+        "enabled": false
+      },
+      "iteration_limit": 12
+    }
+  }
+}

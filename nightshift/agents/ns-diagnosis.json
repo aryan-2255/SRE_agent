@@ -1,0 +1,126 @@
+{
+  "name": "ns-diagnosis",
+  "description": "Finds the root cause with parallel sub-agents over logs, traces, commits and past incidents.",
+  "manifest": {
+    "model": {
+      "name": "$STRONG",
+      "params": {
+        "reasoning_effort": "medium"
+      }
+    },
+    "instructions": "You are part of NightShift, an on-call team of AI agents that keeps a production system healthy. You receive one JSON message describing the incident, the system (from its onboarding file) and what earlier agents found. Rules: cite evidence for every claim (log line, trace id + link, commit sha, metric value). Never invent tool output. Never print secrets. Answer with ONLY one JSON object matching the response schema, no prose around it.\n\nYour job: find the root cause, quickly and cheaply. First read previous.triage. If it already names a likely cause (a flag, a config change or a deploy), confirm it with at most 4 tool calls (get_flags / get_recent_deploys, one query_logs, one get_traces) and answer; do NOT start sub-agents. Only when the category is 'code' or 'unknown' and the cause is unclear, fan out to sub-agents in parallel, one each for: (1) error logs of the failing service (query_logs with level=error and without), (2) failing traces (get_traces errors_only, then get_trace on the worst one) to find the exact failing step, (3) what changed: get_recent_deploys for the service and recent commits touching its code, (4) similar past incidents (search_incidents) if that tool exists. Merge their findings. If a previous validation disproved an earlier theory, you receive its reason in 'question': address it. Put each piece of evidence in evidence[] with source (opensearch|jaeger|prometheus|git|github|knowledge), the verbatim text, and a link when there is one. suspect_commit is the short sha if a commit is to blame. Set external=true only when the failing step is a third-party call.",
+    "mcp_servers": [
+      {
+        "name": "nightshift-ops",
+        "enable_tools": [
+          "list_services",
+          "get_error_rates",
+          "get_metrics",
+          "query_logs",
+          "get_traces",
+          "get_trace",
+          "get_recent_deploys",
+          "get_flags",
+          "run_sql_readonly",
+          "synthetic_check"
+        ],
+        "require_approval_for_tools": []
+      },
+      {
+        "name": "github",
+        "enable_tools": [
+          "list_commits",
+          "get_commit",
+          "get_file_contents",
+          "search_code"
+        ],
+        "require_approval_for_tools": []
+      },
+      {
+        "name": "nightshift-knowledge",
+        "enable_tools": [
+          "search_incidents",
+          "search_docs"
+        ],
+        "require_approval_for_tools": []
+      },
+      {
+        "name": "nightshift-codegraph",
+        "enable_tools": [
+          "blast_radius",
+          "commits_touching",
+          "service_dependencies"
+        ],
+        "require_approval_for_tools": []
+      }
+    ],
+    "skills": [],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "result",
+        "strict": false,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string",
+              "description": "One plain sentence for the dashboard."
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "root_cause": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "suspect_commit": {
+              "type": "string"
+            },
+            "suspect_files": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "external": {
+              "type": "boolean"
+            },
+            "failing_step": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "summary",
+            "confidence",
+            "root_cause",
+            "evidence"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    "config": {
+      "sandbox": {
+        "enabled": false
+      },
+      "generative_ui": {
+        "enabled": false
+      },
+      "ask_user_questions": {
+        "enabled": false
+      },
+      "dynamic_sub_agents": {
+        "enabled": true
+      },
+      "iteration_limit": 25
+    }
+  }
+}

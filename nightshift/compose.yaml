@@ -1,0 +1,61 @@
+# NightShift services. Runs next to the target system on its Docker network.
+name: nightshift
+
+x-mcp-env: &mcp-env
+  SYSTEM_FILE: /app/systems/astronomy-shop.yaml
+  SHOP_PATH: ${SHOP_PATH}
+
+services:
+  ops-mcp:
+    build: ./mcp/ops
+    container_name: ops-mcp
+    environment:
+      <<: *mcp-env
+      OPS_MCP_TOKEN: ${OPS_MCP_TOKEN}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      DB_ADMIN_USER: postgres
+      DB_ADMIN_PASSWORD: ${SHOP_DB_ADMIN_PASSWORD}
+    volumes:
+      - ./systems:/app/systems:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      # the whole repo at the same absolute path as on the host: compose bind mounts resolve correctly
+      # and git works from the shop folder whether the shop is its own repo or part of this one
+      - ${REPO_ROOT}:${REPO_ROOT}
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks: [shop]
+    restart: unless-stopped
+
+  payment-lb:
+    image: nginx:1.29-alpine
+    container_name: payment-lb
+    volumes:
+      - ./mcp/ops/payment-lb/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${SHOP_PATH}/.nightshift/payment-lb:/etc/nginx/upstream:ro
+    networks: [shop]
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: nightshift-postgres
+    environment:
+      POSTGRES_USER: nightshift
+      POSTGRES_PASSWORD: nightshift
+      POSTGRES_DB: nightshift
+    volumes: [nightshift-pg:/var/lib/postgresql/data]
+    ports: ["127.0.0.1:5433:5432"]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: nightshift-redis
+    ports: ["127.0.0.1:6380:6379"]
+    restart: unless-stopped
+
+volumes:
+  nightshift-pg:
+
+networks:
+  shop:
+    name: opentelemetry-demo
+    external: true

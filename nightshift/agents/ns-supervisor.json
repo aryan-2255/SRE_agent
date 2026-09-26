@@ -1,0 +1,77 @@
+{
+  "name": "ns-supervisor",
+  "description": "Decides the next step of an incident: which agent runs, who gets questioned or sent back, when to escalate.",
+  "manifest": {
+    "model": {
+      "name": "$STRONG",
+      "params": {
+        "reasoning_effort": "low"
+      }
+    },
+    "instructions": "You are the incident commander of NightShift, a team of AI agents fixing a production incident. You do not use tools. After every step you read each agent's latest answer and decide ONE next move.\n\nMoves:\n- run: start an agent (stage) normally.\n- ask: put a specific question to an agent that already worked (e.g. the planner doubts the diagnosis: ask diagnosis 'Is the Redis timeout a cause or a symptom?'). The agent re-examines and updates its answer.\n- send_back: return work with concrete feedback (e.g. reviewer asked for changes -> send_back to fix with the reviewer's comments; validation could not reproduce -> send_back to diagnosis with the reason).\n- escalate: stop and hand over to the on-call human, with a clear reason (cause is external, evidence contradicts itself, limits reached, or a change is too risky).\n- finish: only after the service is verified as recovered and any code fix is shipped or not needed.\n\nRules: choose stage ONLY from allowed_stages. Prefer the rule_based_suggestion unless an answer is weak, contradictory or rejected by another agent; then ask or send_back instead. Challenge low confidence (< 0.6) before acting on it. Never try to skip human approval; the harness enforces it anyway. Watch steps_left and budget_left_usd and escalate rather than loop. In `from` put the agent whose answer triggered an ask/send_back. Keep reason to one plain sentence a person can read on a dashboard.",
+    "mcp_servers": [],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "result",
+        "strict": false,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string"
+            },
+            "confidence": {
+              "type": "number"
+            },
+            "action": {
+              "type": "string",
+              "enum": [
+                "run",
+                "ask",
+                "send_back",
+                "escalate",
+                "finish"
+              ]
+            },
+            "stage": {
+              "type": "string"
+            },
+            "from": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string",
+              "description": "question or feedback for ask/send_back; note for run"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "summary",
+            "confidence",
+            "action",
+            "reason"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    "config": {
+      "sandbox": {
+        "enabled": false
+      },
+      "generative_ui": {
+        "enabled": false
+      },
+      "ask_user_questions": {
+        "enabled": false
+      },
+      "dynamic_sub_agents": {
+        "enabled": false
+      },
+      "iteration_limit": 3
+    }
+  }
+}

@@ -1,0 +1,37 @@
+# Onboarding file: everything NightShift needs to know about one system.
+# To watch another system, write another file like this. No agent code changes.
+name: astronomy-shop
+domain: e-commerce
+repo:
+  url: https://github.com/aryan-2255/SRE_agent   # the team repo; the shop lives in its astronomy-shop/ folder
+  branch: main
+  subdir: astronomy-shop                          # service paths below are relative to this folder
+  local_path: ../astronomy-shop
+runtime:
+  type: docker-compose
+  project: astronomy-shop
+  env_files: [.env, .env.override]
+  compose_files: [compose.yaml, compose.full.yaml, compose.observability.yaml, compose.extras.yaml, compose.agent.yaml]
+# URLs as seen from inside the opentelemetry-demo network (ops-mcp). control uses localhost:9090 for Prometheus.
+telemetry:
+  metrics: { type: prometheus, url: http://prometheus:9090, error_metric: traces_span_metrics_calls_total, duration_metric: traces_span_metrics_duration_milliseconds_bucket }
+  logs:    { type: opensearch, url: http://opensearch:9200, index: "otel-logs-*", service_field: resource.service.name.keyword }
+  traces:  { type: jaeger, url: http://frontend-proxy:8080/jaeger/ui/api/v3, ui: http://localhost:8080/jaeger/ui }
+flags: { type: flagd, file: src/flagd/demo.flagd.json }
+shop_url: http://frontend-proxy:8080
+services:
+  payment:        { language: javascript, path: src/payment,        test_cmd: "npm ci && node --test", slo: { max_error_pct: 5, p95_ms: 800 } }
+  frontend:       { language: typescript, path: src/frontend,       test_cmd: "npm ci && npm test",   slo: { max_error_pct: 5, p95_ms: 1500 }, depends_on: [cart, checkout, product-catalog, recommendation] }
+  recommendation: { language: python,     path: src/recommendation, test_cmd: "pip install -r requirements.txt && pytest", slo: { max_error_pct: 5 }, depends_on: [product-catalog] }
+  checkout:       { language: go,         path: src/checkout,       slo: { max_error_pct: 5 }, depends_on: [payment, cart, product-catalog] }
+  cart:           { language: csharp,     path: src/cart,           slo: { max_error_pct: 5 } }
+  product-catalog: { language: go,        path: src/product-catalog, slo: { max_error_pct: 5 } }
+  agent:          { language: python,     path: src/agent,          slo: { max_error_pct: 35 }, depends_on: [product-catalog] }   # baseline ~17% errors
+watch: { window: 2m, for: 2m, demo_for: 30s, min_rps: 0.05, poll_seconds: 5 }
+autonomy:
+  auto: [notify]               # internal team updates need no approval. Night mode adds: rollback, restart_service
+  ask: [rollback, restart_service, scale_service, set_flag, deploy, deploy_canary, promote_canary, create_pull_request, merge_pull_request]
+  never: [drop_table, delete_data, read_secret]
+  quiet_hours: "22:00-09:00"
+tickets: { type: jira, project: SRE }
+notify: { type: slack }

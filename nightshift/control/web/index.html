@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NightShift</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;500;600;700;800&family=Chivo+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 3.5a8.5 8.5 0 1 0 5 15.4A9 9 0 0 1 15.5 3.5z"/></svg>
+    <b>NightShift</b>
+    <span class="sys" id="sys">astronomy-shop</span>
+  </div>
+
+  <div class="inc-title" id="inc-title"><span class="muted">No active incident</span></div>
+
+  <div class="bar-right">
+    <div class="metric"><span class="k">cost</span><span class="v" id="cost">₹0.00</span></div>
+    <div class="metric"><span class="k">elapsed</span><span class="v" id="elapsed">—</span></div>
+    <div class="mode" id="mode"><span class="dot"></span><span id="mode-text">connecting</span></div>
+    <button class="ghost" id="replay-btn" title="Replay the most recent incident">Replay</button>
+    <button class="ghost" id="menu-btn" aria-expanded="false">Menu</button>
+  </div>
+</header>
+
+<main class="room">
+  <!-- LEFT: the system being watched -->
+  <aside class="col left">
+    <section class="card fill">
+      <div class="card-h"><span>Watcher</span><span class="tag ok" id="watch-state">rules · no AI</span></div>
+      <p class="hint">Checks every 5 s. Opens an incident only when a service stays over its limit.</p>
+      <ol class="svc" id="svc"></ol>
+    </section>
+    <section class="card">
+      <div class="card-h"><span>Synthetic customer</span></div>
+      <div class="synth" id="synth">waiting for first check…</div>
+    </section>
+    <section class="card">
+      <div class="card-h"><span>Tool traffic</span><span class="muted small" id="tool-total">0 calls</span></div>
+      <ul class="traffic" id="traffic"></ul>
+    </section>
+  </aside>
+
+  <!-- CENTER: the agent network -->
+  <section class="stage">
+    <svg id="net" viewBox="0 0 1200 800" role="img" aria-label="Live network of NightShift agents around the supervisor, with the systems they reach"></svg>
+    <div class="legend">
+      <span><i class="lg run"></i>working</span>
+      <span><i class="lg wait"></i>waiting for a human</span>
+      <span><i class="lg done"></i>done</span>
+      <span><i class="lg fail"></i>failed</span>
+      <span><i class="lg talk"></i>agents talking</span>
+      <span><i class="lg tool"></i>tool call</span>
+    </div>
+    <div class="now" id="now"><span class="muted">Idle. The watcher is running.</span></div>
+  </section>
+
+  <!-- RIGHT: humans + conversation + evidence -->
+  <aside class="col right">
+    <div id="approval"></div>
+    <section class="card grow">
+      <div class="card-h"><span>Conversation</span><span class="muted small">who decided what, and why</span></div>
+      <ol class="talk" id="talk"><li class="empty">The agents' decisions, questions and answers appear here.</li></ol>
+    </section>
+    <section class="card grow">
+      <div class="card-h"><span>Evidence</span><span class="muted small">exactly what the agents read</span></div>
+      <div class="evidence" id="evidence"><p class="empty">Log lines, traces and commits appear here as they are read.</p></div>
+    </section>
+  </aside>
+</main>
+
+<footer class="timeline">
+  <div class="tl-h"><span>Timeline</span><span class="muted small" id="tl-range"></span></div>
+  <div class="tl" id="tl"></div>
+</footer>
+
+<!-- drawer: history, connections, system -->
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer-in">
+    <div class="drawer-h">
+      <nav>
+        <button data-v="history" class="on">Incidents</button>
+        <button data-v="connections">Connections</button>
+        <button data-v="system">System file</button>
+      </nav>
+      <button class="ghost" id="drawer-close">Close</button>
+    </div>
+    <div class="drawer-b" id="drawer-b"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
