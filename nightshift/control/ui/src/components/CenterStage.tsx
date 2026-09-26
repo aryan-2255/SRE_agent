@@ -127,25 +127,25 @@ function NowBar() {
   const c = TONE_COLOR[n.tone];
   const latest = s.incidents.find((i) => i.status === "resolved") || s.incidents[0];
   return (
-    <div className="flex h-[52px] shrink-0 items-center gap-3 border-t border-line px-5">
+    <div className="flex h-11 shrink-0 items-center gap-3 border-t border-line px-5">
       <span className="relative inline-flex size-2.5 shrink-0">
         {n.tone !== "idle" && <span className="ns-ping absolute inset-0 rounded-full" style={{ background: c }} />}
         <span className="relative size-2.5 rounded-full" style={{ background: c }} />
       </span>
       <div className="relative min-w-0 flex-1 overflow-hidden">
         <AnimatePresence mode="popLayout" initial={false}>
-          <motion.p key={n.text + (n.who || "")} className="m-0 flex min-w-0 items-baseline gap-2 text-[16px]"
+          <motion.p key={n.text + (n.who || "")} className="m-0 flex min-w-0 items-baseline gap-2 text-[14px]"
             initial={{ opacity: 0, y: 12, filter: "blur(6px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: -12, filter: "blur(6px)" }} transition={{ duration: 0.3, ease }}>
             {n.who && <span className="shrink-0 font-semibold" style={{ color: n.tone === "human" ? "var(--amber-ink)" : n.tone === "alert" || n.tone === "stop" ? "var(--red-ink)" : "var(--ink)" }}>{n.who}</span>}
             <span className="truncate text-ink-2">{n.text}</span>
-            {n.detail && <span className="shrink-0 text-[14px] text-muted">{n.detail}</span>}
+            {n.detail && <span className="shrink-0 text-[13px] text-muted max-[1439px]:hidden">{n.detail}</span>}
           </motion.p>
         </AnimatePresence>
       </div>
       {s.mode === "idle" && !s.inc && latest && (
         <button onClick={() => engine.replay(latest.id)}
-          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-3.5 text-[13.5px] font-semibold text-ink transition-colors duration-150 hairline hover:bg-panel-3 active:scale-[0.97]">
+          className="inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-[13px] font-semibold text-ink transition-colors duration-150 hairline hover:bg-panel-3 active:scale-[0.97]">
           <Play size={14} weight="fill" />Replay {latest.id}
         </button>
       )}

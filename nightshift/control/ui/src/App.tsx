@@ -53,7 +53,7 @@ export default function App() {
       <Timeline />
       <AgentPanel />
       <Drawer open={drawer} onClose={closeDrawer} />
-      <Toaster position="top-center" offset={76} gap={8}
+      <Toaster position="bottom-center" offset={20} gap={8}
         toastOptions={{
           unstyled: false,
           style: { background: "var(--panel)", color: "var(--ink)", border: "1px solid var(--line-2)", borderRadius: 14, boxShadow: "var(--shadow-lift)", fontFamily: "var(--font-sans)", fontSize: 14 },

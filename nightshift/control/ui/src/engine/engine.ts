@@ -20,7 +20,7 @@ function fresh(): Omit<State, "mode" | "connected" | "watch" | "history" | "inci
   return {
     inc: null, events: [], status: {}, runs: {}, tools: {}, toolTotal: 0, t0: null, tEnd: null, lastTs: null,
     sats: {}, pending: [], costUsd: 0, feed: [], evidence: [], hubThinking: false, hot: {}, unverified: {},
-    now: { tone: "idle", text: "The watcher is running. It opens an incident only when a problem is large, real and lasting." },
+    now: { tone: "idle", text: "Watching the shop. Incidents open only for large, lasting problems." },
   };
 }
 

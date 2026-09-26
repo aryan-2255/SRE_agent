@@ -13,7 +13,7 @@ export function PanelHead({ icon, title, right, sub }: { icon: React.ReactNode; 
         <h2 className="m-0 text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>
         <div className="ml-auto">{right}</div>
       </div>
-      {sub && <p className="m-0 mt-1 text-[12.5px] text-muted [@media(max-height:899px)]:hidden">{sub}</p>}
+      {sub && <p className="m-0 mt-1 text-[12.5px] text-muted [@media(max-height:999px)]:hidden">{sub}</p>}
     </div>
   );
 }
@@ -103,9 +103,9 @@ function Signals() {
   return (
     <ul className="m-0 shrink-0 list-none space-y-1 border-t border-line px-5 py-2.5">
       {sig.map(([name, v]) => (
-        <li key={name} className="flex items-baseline gap-2 text-[12.5px]" title={v.explain}>
+        <li key={name} className="flex items-baseline gap-2 text-[12.5px] leading-[1.35]" title={v.explain}>
           <span className="size-1.5 shrink-0 translate-y-[-1px] rounded-full" style={{ background: v.over ? "var(--red)" : "var(--go)" }} />
-          <span className="truncate" style={{ color: v.over ? "var(--red-ink)" : "var(--ink-2)" }}>{name}</span>
+          <span className="min-w-0" style={{ color: v.over ? "var(--red-ink)" : "var(--ink-2)" }}>{name}</span>
           <span className="ml-auto shrink-0 font-mono" style={{ color: v.over ? "var(--red-ink)" : "var(--muted)" }}>{v.value}{v.over ? ` / ${v.above}` : ""}</span>
         </li>
       ))}
@@ -142,8 +142,8 @@ function SyntheticLine() {
     <div className="hidden shrink-0 items-center gap-2 border-t border-line px-5 py-2.5 text-[12.5px] [@media(max-height:999px)]:flex"
       title={syn.steps.map((x) => `${x.ok ? "ok" : "failed"} · ${x.step} · ${x.ms} ms`).join("\n")}>
       <ShoppingCart size={15} className="shrink-0 text-muted" />
-      <span className="truncate text-ink-2">Synthetic customer</span>
-      <span className="ml-auto flex shrink-0 items-center gap-1">
+      <span className="shrink-0 whitespace-nowrap text-ink-2">Test customer</span>
+      <span className="ml-auto flex min-w-0 items-center justify-end gap-1 overflow-hidden">
         {syn.steps.map((x) => <span key={x.step} className="size-1.5 rounded-full" style={{ background: x.ok ? "var(--go)" : "var(--red)" }} />)}
       </span>
       <span className="shrink-0 font-semibold" style={{ color: syn.passed ? "var(--go-ink)" : "var(--red-ink)" }}>{ok}/{syn.steps.length}</span>

@@ -296,7 +296,9 @@ export default function NetworkMap({ onHover }: { onHover?: (h: Hover) => void }
               return (
                 <g key={i}>
                   <circle cx={cx} cy={cy} r={5} style={{ fill: "var(--go)" }} />
-                  <text x={p.x + (r + 11) * Math.cos(a)} y={p.y + (r + 11) * Math.sin(a) + 4} fontSize={12} textAnchor={Math.cos(a) < 0 ? "end" : "start"} style={{ fill: "var(--ink-2)" }}>{t}</text>
+                  <text x={p.x + (r + 11) * Math.cos(a)} y={p.y + (r + 11) * Math.sin(a) + 4} fontSize={11} textAnchor={Math.cos(a) < 0 ? "end" : "start"} style={{ fill: "var(--muted)" }}>
+                    <title>{t}</title>{t.length > 12 ? t.slice(0, 11) + "…" : t}
+                  </text>
                 </g>
               );
             })}

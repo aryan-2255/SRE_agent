@@ -314,8 +314,14 @@ export default function AgentPanel() {
           style={{ boxShadow: "var(--shadow-lift)" }}
           initial={{ x: "105%" }} animate={{ x: 0 }} exit={{ x: "105%" }} transition={{ type: "spring", duration: 0.45, bounce: 0 }}>
           <div className="flex items-center gap-2 border-b border-line px-5 py-3">
-            <span className="text-[13px] text-muted">{s.inc ? `${s.inc.id} · ` : ""}{s.follow ? "following the live agent" : "pinned"}</span>
-            <button onClick={close} aria-label="Close" className="ml-auto grid size-9 place-items-center rounded-lg text-muted transition-colors hover:bg-panel-3 hover:text-ink">
+            <span className="text-[13px] text-muted">{s.inc ? s.inc.id : ""}</span>
+            {/* the panel covers the map's toggle, so it has its own */}
+            <button onClick={() => engine.setFollow(!s.follow)} aria-pressed={s.follow}
+              className="ml-auto inline-flex h-8 items-center gap-2 rounded-lg px-3 text-[13px] font-semibold transition-colors duration-150 hairline hover:bg-panel-3"
+              style={{ color: s.follow ? "var(--go-ink)" : "var(--ink-2)", background: s.follow ? "var(--go-soft)" : undefined }}>
+              <span className="size-2 rounded-full" style={{ background: s.follow ? "var(--go)" : "var(--dim)" }} />Follow the live agent
+            </button>
+            <button onClick={close} aria-label="Close" className="grid size-9 place-items-center rounded-lg text-muted transition-colors hover:bg-panel-3 hover:text-ink">
               <X size={18} />
             </button>
           </div>

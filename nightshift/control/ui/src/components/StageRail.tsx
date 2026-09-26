@@ -5,7 +5,8 @@ import { engine } from "../engine/engine";
 import { useFocus } from "../engine/focus";
 import { ease } from "../lib/format";
 
-const LABEL = Object.fromEntries(AGENTS.map((a) => [a.id, a.label]));
+// the rail is narrow: the long map label gets a short form here
+const LABEL: Record<string, string> = { ...Object.fromEntries(AGENTS.map((a) => [a.id, a.label])), cicd: "CI/CD" };
 
 export default function StageRail() {
   const s = useEngine();

@@ -43,7 +43,7 @@ export function Approval() {
           animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
           exit={{ opacity: 0, y: -10, scale: 0.98, filter: "blur(4px)", transition: { duration: 0.2 } }}
           transition={{ type: "spring", duration: 0.55, bounce: 0.12 }}
-          className="relative flex min-h-[260px] shrink flex-col overflow-hidden rounded-[18px] p-5"
+          className="relative flex min-h-[200px] shrink flex-col overflow-hidden rounded-[18px] p-5"
           style={{ background: "color-mix(in oklab, var(--amber) 7%, var(--panel))", boxShadow: "var(--shadow-lift), inset 0 0 0 1px color-mix(in oklab, var(--amber) 42%, transparent)" }}
           aria-live="assertive">
           <BorderBeam size={200} duration={6} colorFrom="var(--amber)" />
@@ -107,7 +107,7 @@ export function Approval() {
             placeholder={live ? "Reason, sent with a denial" : "Replay: decisions are read-only"}
             className="mt-2 h-10 w-full shrink-0 rounded-xl bg-panel px-3.5 text-[13.5px] text-ink outline-none transition-shadow duration-150 hairline placeholder:text-dim focus:shadow-[inset_0_0_0_1.5px_var(--amber)] disabled:opacity-70" />
           {error && <p className="m-0 mt-2 text-[13px] font-medium" style={{ color: "var(--red-ink)" }}>{error}</p>}
-          {!live && <p className="m-0 mt-2 text-[12px] text-dim">Showing {describeArgs(a.args) || a.tool} as it was requested.</p>}
+          {!live && <p className="m-0 mt-2 shrink-0 text-[12px] text-dim [@media(max-height:899px)]:hidden">Showing {describeArgs(a.args) || a.tool} as it was requested.</p>}
         </motion.section>
       )}
     </AnimatePresence>
@@ -140,7 +140,7 @@ export function Conversation() {
   const [focus] = useFocus();
   const items = focus ? s.feed.filter((f) => f.stage === focus || f.who.startsWith(WHO[focus] || focus)) : s.feed;
   return (
-    <section className="panel flex min-h-0 flex-[1.25] flex-col overflow-hidden">
+    <section className="panel flex min-h-[120px] flex-[1.25] flex-col overflow-hidden">
       <PanelHead icon={<ChatsCircle size={18} />} title="Conversation" sub="Who decided what, and why."
         right={<div className="flex items-center gap-2"><FocusChip /><span className="font-mono text-[12.5px] text-dim">{items.length}</span></div>} />
       <ol className="scroll m-0 min-h-0 flex-1 list-none space-y-1 overflow-y-auto px-3 pb-3">
@@ -189,8 +189,10 @@ function TraceLink({ id, link }: { id?: string; link?: string }) {
   if (!id) return null;
   return <a href={link || `http://localhost:8080/jaeger/ui/trace/${id}`} target="_blank" rel="noopener" className="ml-1 inline-flex items-center gap-0.5 no-underline hover:underline">trace<ArrowSquareOut size={11} /></a>;
 }
-const Line = ({ bad, children }: { bad?: boolean; children: React.ReactNode }) => (
-  <div className="truncate font-mono text-[12.5px] leading-[1.6]" style={{ color: bad ? "var(--red-ink)" : "var(--ink-2)" }}>{children}</div>
+const Line = ({ bad, children, link }: { bad?: boolean; children: React.ReactNode; link?: React.ReactNode }) => (
+  <div className="flex min-w-0 items-baseline gap-1 font-mono text-[12.5px] leading-[1.6]" style={{ color: bad ? "var(--red-ink)" : "var(--ink-2)" }}>
+    <span className="min-w-0 flex-1 truncate">{children}</span>{link && <span className="shrink-0">{link}</span>}
+  </div>
 );
 
 function Items({ d }: { d: EvidenceItem }) {
@@ -202,11 +204,11 @@ function Items({ d }: { d: EvidenceItem }) {
       return <>
         <div className="mb-1 text-[12px] text-muted">{it.service} · {it.count} lines · {Object.entries(it.by_level || {}).map(([k, v]) => `${v} ${k}`).join(", ")}</div>
         {(it.lines || []).slice(0, 5).map((l: any, i: number) => (
-          <Line key={i} bad={/error|fatal|warn/i.test(l.level || "")}>{(l.time || "").slice(11, 19)} {l.level} · {l.message}<TraceLink id={l.trace_id} /></Line>))}
+          <Line key={i} bad={/error|fatal|warn/i.test(l.level || "")} link={<TraceLink id={l.trace_id} />}>{(l.time || "").slice(11, 19)} {l.level} · {l.message}</Line>))}
       </>;
     case "get_traces":
       return <>{(Array.isArray(it) ? it : []).slice(0, 3).map((t: any) => (
-        <Line key={t.trace_id} bad={!!t.failing_step}>{t.root} · {t.duration_ms} ms{t.failing_step ? ` · ${t.failing_step.service}: ${t.failing_step.message || ""}` : ""}<TraceLink id={t.trace_id} link={t.link} /></Line>))}
+        <Line key={t.trace_id} bad={!!t.failing_step} link={<TraceLink id={t.trace_id} link={t.link} />}>{t.root} · {t.duration_ms} ms{t.failing_step ? ` · ${t.failing_step.service}: ${t.failing_step.message || ""}` : ""}</Line>))}
         {!(Array.isArray(it) && it.length) && <Line>No matching traces.</Line>}</>;
     case "get_trace": {
       const bad = (it.steps || []).filter((x: any) => x.error);
@@ -236,7 +238,7 @@ export function Evidence() {
   const [focus] = useFocus();
   const items = focus ? s.evidence.filter((e) => e.stage === focus) : s.evidence;
   return (
-    <section className="panel flex min-h-0 flex-1 flex-col overflow-hidden">
+    <section className="panel flex min-h-[96px] flex-1 flex-col overflow-hidden">
       <PanelHead icon={<Files size={18} />} title="Evidence" sub="Exactly what the agents read."
         right={<span className="font-mono text-[12.5px] text-dim">{items.length}</span>} />
       <div className="scroll min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3">
