@@ -53,8 +53,12 @@ function ServiceRow({ name, s, history }: { name: string; s: ServiceTile; histor
       title={`${name}: ${s.error_pct.toFixed(2)}% errors at ${s.rps.toFixed(2)} req/s (limit ${s.limit_pct}%)`}>
       <div className="min-w-0 flex-1">
         <div className="truncate text-[14.5px] font-medium">{name}</div>
-        <div className="truncate text-[12px]" style={{ color: s.over ? "var(--red-ink)" : "var(--muted)" }}>
-          {s.over ? `over ${s.over_for_s}s · opens at ${s.fires_after_s}s` : `${s.rps.toFixed(2)}/s · limit ${s.limit_pct}%`}
+        <div className="truncate text-[12px]" style={{ color: s.over ? "var(--red-ink)" : "var(--muted)" }}
+          title={s.op ? s.op.name : undefined}>
+          {s.op ? `${s.op.name.split("/").pop()} fails ${s.op.error_pct}% (${s.op.failed_requests} failed)`
+            : s.over ? `over ${s.over_for_s}s · opens at ${s.fires_after_s}s`
+            : s.state === "quiet" ? (s.rps ? "too few requests to judge" : "no traffic")
+            : `${s.rps.toFixed(2)}/s · limit ${s.limit_pct}%`}
         </div>
       </div>
       <span className="max-[1599px]:hidden"><Trace values={history} limit={s.limit_pct} over={s.over} /></span>
@@ -71,7 +75,8 @@ function ServiceRow({ name, s, history }: { name: string; s: ServiceTile; histor
 
 export function Watcher() {
   const s = useEngine();
-  const rows = Object.entries(s.watch?.services || {});
+  // failing first, then by error rate
+  const rows = Object.entries(s.watch?.services || {}).sort((a, b) => Number(b[1].over) - Number(a[1].over) || b[1].error_pct - a[1].error_pct);
   const breach = rows.some(([, r]) => r.over);
   return (
     <section className="panel flex min-h-[200px] flex-1 flex-col overflow-hidden">
@@ -84,8 +89,47 @@ export function Watcher() {
             <li key={i} className="mx-5 my-3 h-9 animate-pulse rounded-lg bg-panel-3" />
           ))}
       </ul>
+      <Signals />
       <SyntheticLine />
     </section>
+  );
+}
+
+/** Numbers error rates miss, such as a Kafka consumer falling behind. */
+function Signals() {
+  const s = useEngine();
+  const sig = Object.entries(s.watch?.signals || {});
+  if (!sig.length) return null;
+  return (
+    <ul className="m-0 shrink-0 list-none space-y-1 border-t border-line px-5 py-2.5">
+      {sig.map(([name, v]) => (
+        <li key={name} className="flex items-baseline gap-2 text-[12.5px]" title={v.explain}>
+          <span className="size-1.5 shrink-0 translate-y-[-1px] rounded-full" style={{ background: v.over ? "var(--red)" : "var(--go)" }} />
+          <span className="truncate" style={{ color: v.over ? "var(--red-ink)" : "var(--ink-2)" }}>{name}</span>
+          <span className="ml-auto shrink-0 font-mono" style={{ color: v.over ? "var(--red-ink)" : "var(--muted)" }}>{v.value}{v.over ? ` / ${v.above}` : ""}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Across the top when monitoring itself is down: silence must not look like health. */
+export function BlindBanner() {
+  const s = useEngine();
+  const b = s.watch?.blind;
+  // the wrapper always renders so the page grid keeps its rows when monitoring is fine
+  return (
+    <div>
+    <AnimatePresence initial={false}>
+      {b && (
+        <motion.div key="blind" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease }}
+          role="alert" className="flex items-center gap-2.5 px-4 py-2 text-[14px] font-semibold"
+          style={{ background: "var(--red-soft)", color: "var(--red-ink)", boxShadow: "inset 0 -1px 0 color-mix(in oklab, var(--red) 40%, transparent)" }}>
+          <Pulse size={17} weight="bold" />Monitoring is blind. {b.reason}
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </div>
   );
 }
 

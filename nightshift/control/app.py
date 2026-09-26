@@ -99,9 +99,10 @@ def who(request: Request) -> str:
 @app.get("/api/me")
 def me(request: Request):
     try:
-        return {"name": who(request), "mode": "users" if settings.DASHBOARD_USERS else "local"}
+        return {"name": who(request), "mode": "users" if settings.DASHBOARD_USERS else "local", "budget_usd": settings.INCIDENT_BUDGET_USD}
     except HTTPException as e:
-        return {"name": None, "mode": "users" if settings.DASHBOARD_USERS else "local", "error": e.detail}
+        return {"name": None, "mode": "users" if settings.DASHBOARD_USERS else "local", "budget_usd": settings.INCIDENT_BUDGET_USD,
+                "error": e.detail}
 
 
 @app.post("/api/approvals/{approval_id}")
@@ -121,6 +122,12 @@ def agents():
     """Who is on the team: each agent's job, model tier, tools, which tools wait for a person, and its runtime."""
     stage_of = {v: k for k, v in orchestrator.AGENTS.items()}
     stage_of["ns-supervisor"] = "supervisor"
+    # only the MCP servers this TrueForge really has (the specs also name optional ones)
+    try:
+        have = {srv["manifest"]["name"] for srv in httpx.get(f"{settings.TRUEFORGE_BASE_URL}/api/v1/settings/mcp-servers", timeout=3).json()["data"]}
+        have.add("github")
+    except Exception:  # noqa: BLE001
+        have = None
     out = []
     for f in sorted((settings.ROOT / "agents").glob("ns-*.json")):
         spec = json.loads(f.read_text())
@@ -129,7 +136,7 @@ def agents():
         out.append({
             "name": spec["name"], "stage": stage_of.get(spec["name"]), "job": spec["description"],
             "model": {"$SMALL": "small", "$STRONG": "strong"}.get(m["model"]["name"], m["model"]["name"]),
-            "tools": {s["name"]: s.get("enable_tools", []) for s in m.get("mcp_servers", [])},
+            "tools": {s["name"]: s.get("enable_tools", []) for s in m.get("mcp_servers", []) if have is None or s["name"] in have},
             "asks_before": [t for s in m.get("mcp_servers", []) for t in s.get("require_approval_for_tools", [])],
             "sandbox": cfg.get("sandbox", {}).get("enabled", False),
             "sub_agents": cfg.get("dynamic_sub_agents", {}).get("enabled", False),

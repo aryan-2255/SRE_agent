@@ -59,8 +59,8 @@ signals:
 # op_error_pct: the limit for any single operation (endpoint), so one broken endpoint cannot hide in a service's average.
 watch: { window: 2m, for: 2m, demo_for: 30s, min_rps: 0.05, min_failures: 3, op_error_pct: 20, poll_seconds: 5, blind_after_s: 60 }
 autonomy:
-  auto: [notify]               # internal team updates need no approval. Night mode adds: rollback, restart_service
-  ask: [rollback, restart_service, scale_service, set_flag, deploy, deploy_canary, promote_canary, create_pull_request, merge_pull_request]
+  auto: []                     # nothing runs without a person: every change, deploy, PR and even team notifications ask first
+  ask: [rollback, restart_service, scale_service, set_flag, deploy, deploy_canary, promote_canary, create_branch, push_files, create_pull_request, merge_pull_request, notify]
   never: [drop_table, delete_data, read_secret]
   quiet_hours: "22:00-09:00"
 tickets: { type: jira, project: SRE }

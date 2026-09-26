@@ -1,5 +1,6 @@
 import { POS, SYSTEMS, USD_INR, systemFor, who } from "./constants";
-import type { EvidenceItem, FeedItem, Fx, Incident, Mode, NowLine, NsEvent, Pending, State, WatchData } from "./types";
+import type { EvidenceItem, FeedItem, Fx, Incident, Me, Mode, NowLine, NsEvent, Pending, State, TeamMember, WatchData } from "./types";
+import { getPinned, setFocus } from "./focus";
 
 export type Toast = { tone: "alert" | "human" | "done" | "stop"; title: string; body?: string };
 
@@ -15,16 +16,16 @@ export function unwrapCall(tool: string, args: any): { tool: string; args: any; 
   return { tool, args: a };
 }
 
-function fresh(): Omit<State, "mode" | "connected" | "watch" | "history" | "incidents"> {
+function fresh(): Omit<State, "mode" | "connected" | "watch" | "history" | "incidents" | "team" | "me" | "follow"> {
   return {
     inc: null, events: [], status: {}, runs: {}, tools: {}, toolTotal: 0, t0: null, tEnd: null, lastTs: null,
-    sats: {}, pending: [], costUsd: 0, feed: [], evidence: [], hubThinking: false, hot: {},
+    sats: {}, pending: [], costUsd: 0, feed: [], evidence: [], hubThinking: false, hot: {}, unverified: {},
     now: { tone: "idle", text: "The watcher is running. It opens an incident only when a problem is large, real and lasting." },
   };
 }
 
 class Engine {
-  state: State = { mode: "idle", connected: false, watch: null, history: {}, incidents: [], ...fresh() };
+  state: State = { mode: "idle", connected: false, watch: null, history: {}, incidents: [], team: [], me: null, follow: false, ...fresh() };
   private listeners = new Set<() => void>();
   private fxListeners = new Set<(f: Fx) => void>();
   private toastListeners = new Set<(t: Toast) => void>();
@@ -88,6 +89,8 @@ class Engine {
       case "stage.started":
         d.runs = { ...d.runs, [st]: (d.runs[st] || 0) + 1 };
         setNode(st, "running");
+        // follow mode: the detail panel moves to whichever agent starts working
+        if (animate && d.follow && d.mode === "live" && getPinned() !== st) setTimeout(() => setFocus(st, true), 0);
         if (animate) this.fx({ type: "pulse", from: st === "triage" ? "watcher" : "supervisor", to: st, dur: 700 });
         now({ tone: "agent", who: who(st), text: d.runs[st] > 1 ? `started, run ${d.runs[st]}` : "started" });
         break;
@@ -147,7 +150,7 @@ class Engine {
       case "approval.requested": {
         setNode(st, "waiting");
         const c = unwrapCall(String(x.tool || ""), x.args);
-        d.pending = [...d.pending, { id: x.approval_id, stage: st, tool: c.tool, args: c.args }];
+        d.pending = [...d.pending.filter((p) => p.id !== x.approval_id), { id: x.approval_id, stage: st, tool: c.tool, args: c.args, context: x.context || {}, undo: x.undo }];
         if (animate) { this.fx({ type: "pulse", from: st, to: "human", tone: "talk", dur: 800, bend: 0.1 }); hot("human", 3000); }
         say("human", `${who(st)} → on-call`, `asks permission to run ${c.tool} ${JSON.stringify(c.args || {})}`);
         now({ tone: "human", who: "waiting", text: `${who(st)} needs your approval to run ${c.tool}`, detail: describeArgs(c.args) });
@@ -158,7 +161,25 @@ class Engine {
         d.pending = d.pending.filter((p) => p.id !== x.approval_id);
         if (d.status[st] === "waiting") setNode(st, "running");
         if (animate) this.fx({ type: "pulse", from: "human", to: st, tone: "talk", dur: 700, bend: 0.1 });
-        say("human", `on-call · ${x.via || "?"}`, e.text.replace(/^call_tool /, ""));
+        say("human", x.via === "policy" ? "policy" : `${x.by || "on-call"} · ${x.via || "?"}`, e.text.replace(/^call_tool /, ""));
+        break;
+      case "approval.reminder":
+        say("human", "reminder", e.text);
+        if (animate) this.toast({ tone: "human", title: "Still waiting for your approval", body: e.text });
+        break;
+      case "tool.result":
+        break; // kept in events: the agent panel pairs it with its call
+      case "evidence.unverified":
+        d.unverified = { ...d.unverified, [st]: (d.unverified[st] || 0) + ((x.items || []).length || 1) };
+        say("bad", `${who(st)} · evidence`, e.text);
+        break;
+      case "stage.waiting":
+        say("sys", who(st), e.text);
+        now({ tone: "agent", who: who(st), text: e.text });
+        break;
+      case "incident.resumed":
+        d.status = settle(d); // the old process's runs died with it
+        say("sys", "nightshift", e.text);
         break;
       case "agent.question":
       case "agent.sendback":
@@ -190,6 +211,9 @@ class Engine {
       case "incident.closed": {
         d.tEnd = Date.parse(ts);
         d.hubThinking = false;
+        // nothing keeps working after the incident ends: anything still running was cut off
+        d.status = settle(d);
+        d.pending = [];
         const status = ({ "incident.resolved": "resolved", "incident.escalated": "escalated", "incident.closed": "false_alarm" } as const)[e.kind];
         if (d.inc) d.inc = { ...d.inc, status };
         say(e.kind === "incident.resolved" ? "agent" : "bad", "incident", e.text);
@@ -210,7 +234,7 @@ class Engine {
   }
 
   async refreshIncidents() {
-    try { this.patch({ incidents: await getJson<Incident[]>("/api/incidents") }); } catch { /* offline */ }
+    try { this.patch({ incidents: await getJson<Incident[]>("/api/incidents?limit=40") }); } catch { /* offline */ }
     return this.state.incidents;
   }
 
@@ -221,9 +245,9 @@ class Engine {
     const active = ["open", "mitigated"].includes(inc.status);
     this.reset(active ? "live" : "view", inc);
     for (const e of inc.events || []) this.apply(e, false);
-    const pending: Pending[] = (inc.approvals || []).filter((a) => a.status === "pending").map((a) => {
+    const pending: Pending[] = (inc.approvals || []).filter((a) => a.status === "pending").map((a: any) => {
       const c = unwrapCall(a.tool, a.args);
-      return { id: a.id, stage: a.stage, tool: c.tool, args: c.args };
+      return { id: a.id, stage: a.stage, tool: c.tool, args: c.args, context: a.context || {} };
     });
     const tEnd = inc.resolved_at ? Date.parse(inc.resolved_at) : !active ? this.state.lastTs : null;
     this.patch({ pending, costUsd: Number(inc.total_cost_usd || 0), tEnd, inc: { ...inc, events: undefined } });
@@ -271,11 +295,29 @@ class Engine {
     else this.patch({ now: { tone: "idle", text: "No incidents to replay yet." } });
   }
 
-  async decide(id: number, decision: "approve" | "deny", reason = "") {
-    await fetch(`/api/approvals/${id}`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ decision, reason, by: "dashboard" }),
+  /** The server decides who is deciding (DASHBOARD_USERS token, or this machine only). */
+  async decide(id: number, decision: "approve" | "deny", reason = ""): Promise<string | null> {
+    const post = () => fetch(`/api/approvals/${id}`, {
+      method: "POST", headers: { "content-type": "application/json", ...authHeader() },
+      body: JSON.stringify({ decision, reason }),
     });
+    let r = await post();
+    if (r.status === 401 && signIn()) { r = await post(); this.loadMe(); }
+    if (r.ok) return null;
+    const body = await r.json().catch(() => ({}));
+    return body.detail || `The server answered ${r.status}`;
+  }
+
+  async loadMe() {
+    try { this.patch({ me: await getJson<Me>("/api/me", true) }); } catch { /* offline */ }
+  }
+
+  setFollow(on: boolean) {
+    this.patch({ follow: on });
+    if (on) {
+      const working = Object.entries(this.state.status).find(([, v]) => v === "running" || v === "waiting");
+      setFocus(working ? working[0] : null, true);
+    }
   }
 
   // ---------------- stream ----------------
@@ -286,6 +328,8 @@ class Engine {
     const sp = Number(q.get("speed"));
     if (sp > 0) this.speed = sp;
     this.connect();
+    this.loadMe();
+    getJson<TeamMember[]>("/api/agents").then((team) => this.patch({ team })).catch(() => {});
     getJson<WatchData>("/api/watch").then((w) => this.applyWatch(w)).catch(() => {});
     this.refreshIncidents().then((rows) => {
       const h = location.hash;
@@ -295,6 +339,13 @@ class Engine {
         return;
       }
       if (h.startsWith("#view-")) { this.goLive(h.slice(6)); return; }
+      // #INC-008 opens an incident, #INC-008/diagnosis also opens that agent's panel
+      const deep = h.match(/^#(INC-\d+)(?:\/([a-z]+))?$/);
+      if (deep) {
+        if (deep[2]) { this.patch({ follow: false }); setFocus(deep[2], true); }
+        this.goLive(deep[1]);
+        return;
+      }
       const active = rows.find((i) => ["open", "mitigated"].includes(i.status));
       if (active) this.goLive(active.id);
     });
@@ -329,13 +380,31 @@ class Engine {
   }
 }
 
+/** Runs that were cut off: an agent that already answered once stays "done", otherwise it was interrupted. */
+function settle(d: State): State["status"] {
+  const answered = new Set(d.events.filter((e) => e.kind === "stage.done").map((e) => e.stage));
+  return Object.fromEntries(Object.entries(d.status).map(([k, v]) =>
+    [k, v === "running" || v === "waiting" ? (answered.has(k) ? "done" : "interrupted") : v]));
+}
+
 export function describeArgs(args: any): string {
   if (!args || typeof args !== "object") return args ? String(args) : "";
   return Object.entries(args).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ");
 }
 function safeJson(v: any) { if (typeof v !== "string") return v; try { return JSON.parse(v); } catch { return v; } }
-async function getJson<T>(url: string): Promise<T> {
-  const r = await fetch(url);
+function authHeader(): Record<string, string> {
+  try { const t = localStorage.getItem("ns_token"); return t ? { authorization: `Bearer ${t}` } : {}; } catch { return {}; }
+}
+/** Ask once for the NightShift token (DASHBOARD_USERS in .env) and keep it for approvals. */
+function signIn(): boolean {
+  const t = window.prompt("Approvals need your NightShift sign-in token (DASHBOARD_USERS in .env):");
+  if (!t) return false;
+  try { localStorage.setItem("ns_token", t.trim()); } catch { /* private mode */ }
+  document.cookie = `ns_token=${encodeURIComponent(t.trim())}; path=/; SameSite=Strict`;
+  return true;
+}
+async function getJson<T>(url: string, auth = false): Promise<T> {
+  const r = await fetch(url, auth ? { headers: authHeader() } : undefined);
   if (!r.ok) throw new Error(`${url}: ${r.status}`);
   return r.json();
 }

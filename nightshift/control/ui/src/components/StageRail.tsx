@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { AGENTS, PIPELINE } from "../engine/constants";
 import { useEngine } from "../engine/useEngine";
+import { engine } from "../engine/engine";
 import { useFocus } from "../engine/focus";
 import { ease } from "../lib/format";
 
@@ -20,11 +21,11 @@ export default function StageRail() {
         initial={false} animate={{ scaleX: pct / 100 }} transition={{ duration: 0.7, ease }} />
       {PIPELINE.map((id) => {
         const st = s.status[id];
-        const color = st === "waiting" ? "var(--amber)" : st === "failed" ? "var(--red)" : st === "running" || st === "done" ? "var(--go)" : "var(--dim)";
+        const color = st === "waiting" ? "var(--amber)" : st === "failed" || st === "interrupted" ? "var(--red)" : st === "running" || st === "done" ? "var(--go)" : "var(--dim)";
         const active = st === "running" || st === "waiting";
         const dimmed = focus && focus !== id;
         return (
-          <button key={id} onMouseEnter={() => setFocus(id, false)} onMouseLeave={() => setFocus(null, false)} onClick={() => setFocus(focus === id ? null : id, true)}
+          <button key={id} onMouseEnter={() => setFocus(id, false)} onMouseLeave={() => setFocus(null, false)} onClick={() => { engine.setFollow(false); setFocus(focus === id ? null : id, true); }}
             className="group relative flex min-w-0 flex-1 items-center gap-2 text-left transition-opacity duration-200"
             style={{ opacity: dimmed ? 0.45 : st === "skipped" ? 0.5 : 1 }} aria-pressed={focus === id}>
             <span className="relative grid size-3 shrink-0 place-items-center">

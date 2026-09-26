@@ -64,7 +64,12 @@ def _parse_json(text: str) -> dict:
     start, end = text.find("{"), text.rfind("}")
     if start < 0 or end < 0:
         raise ValueError("no JSON object in the agent's answer")
-    return json.loads(text[start:end + 1])
+    body = text[start:end + 1]
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        # models sometimes write Windows paths or regexes with lone backslashes inside strings: escape them and retry
+        return json.loads(re.sub(r'\\(?![\\/"bfnrtu])', r"\\\\", body), strict=False)
 
 
 def unwrap_tool(name: str, args):

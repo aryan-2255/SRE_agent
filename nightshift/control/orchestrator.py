@@ -193,8 +193,11 @@ class Pipeline:
     def allowed_moves(self) -> dict[str, str]:
         """Guardrails: which agents may run now, and why the others may not. The supervisor chooses only from these."""
         cat = self.inc.get("category") or "unknown"
-        code_path = cat in ("code", "unknown")
+        # a sandbox can only test code: "unknown" counts as a code problem only if diagnosis points at a change
+        suspect = self._ok("diagnosis", "suspect_commit") or self._ok("diagnosis", "suspect_files")
+        code_path = cat == "code" or (cat == "unknown" and bool(suspect))
         reproduced = bool(self._ok("validation", "reproduced"))
+        cannot_run = self._ok("validation", "runnable") is False  # e.g. a Java service: read, not run
         recovered = bool(self._ok("verify", "recovered")) and self._last("verify") > self._last("mitigation")
         tests_ok = bool(self._ok("test", "passed")) and self._last("test") > self._last("fix")
         review_ok = self._ok("review", "verdict") == "approve" and self._last("review") > self._last("fix")
@@ -202,7 +205,7 @@ class Pipeline:
             "diagnosis": True,
             "validation": "diagnosis" in self.out and code_path,
             "docs": "diagnosis" in self.out,
-            "plan": "diagnosis" in self.out and (reproduced or not code_path),
+            "plan": "diagnosis" in self.out and (reproduced or cannot_run or not code_path),
             "mitigation": "plan" in self.out,
             # verify after every change; or once more when it said "not recovered" but live numbers look healthy
             "verify": self._last("mitigation") > self._last("verify") or self._recheck_verify(),
@@ -240,7 +243,7 @@ class Pipeline:
             return {"action": "run", "stage": "diagnosis"}
         if cat == "external" or self._ok("diagnosis", "external"):
             return {"action": "escalate", "reason": "Cause is outside our system. No changes made."}
-        if cat in ("code", "unknown") and "validation" not in self.out and "validation" in moves:
+        if "validation" not in self.out and "validation" in moves:
             return {"action": "run", "stage": "validation"}
         if "validation" in self.out and not self._ok("validation", "reproduced") and "plan" not in moves:
             if "diagnosis" in moves:
@@ -273,11 +276,16 @@ class Pipeline:
         if self._ok("review", "verdict") == "changes" and "fix" in moves and self._last("review") > self._last("fix"):
             return {"action": "send_back", "stage": "fix", "from": "review",
                     "message": "; ".join(self._ok("review", "comments", []) or ["Reviewer asked for changes."])}
+        tested = self._last("test") > self._last("fix") and bool(self._ok("test", "passed"))
         for stage in ("fix", "test", "pr", "review", "cicd"):
-            if stage in moves:
-                if stage == "fix" and "fix" in self.out and "test" in self.out and self._ok("test", "passed"):
-                    continue
-                return {"action": "run", "stage": stage}
+            if stage not in moves:
+                continue
+            # a fix is written once, then tested; it is only rewritten after a failed test or a review asking for changes
+            if stage == "fix" and "fix" in self.out and (self._last("fix") > self._last("test") or tested):
+                continue
+            if stage == "pr" and "pr" in self.out and self._last("pr") > self._last("fix"):
+                continue  # the PR for this fix exists: review it
+            return {"action": "run", "stage": stage}
         if "postmortem" in moves:
             return {"action": "run", "stage": "postmortem"}
         return {"action": "finish"}
@@ -487,6 +495,7 @@ class Pipeline:
         return "\n".join(lines)
 
     def escalate(self, reason: str) -> None:
+        cancel_sessions(self.id)
         self.set(status="escalated", summary=reason)
         jira.comment(self.inc.get("jira_key"), f"Escalated to on-call: {reason}")
         bus.publish("incident.escalated", f"Escalated to a human: {reason}", self.id)
@@ -516,11 +525,25 @@ def start_worker() -> None:
     threading.Thread(target=loop, daemon=True, name="incident-worker").start()
 
 
+def cancel_sessions(incident_id: str) -> None:
+    """Stop TrueForge sessions that no process is listening to any more; otherwise they keep running and billing."""
+    if settings.STAGE_RUNNER == "fake":
+        return
+    rows = db.q("select trueforge_session_id s from stages where incident_id=%s and status in ('running','waiting_approval') "
+                "and trueforge_session_id is not null", incident_id)
+    for r in rows:
+        try:
+            runner().client.sessions.cancel(session_id=r["s"])
+        except Exception as e:  # noqa: BLE001
+            log.info("could not cancel session %s: %s", r["s"], e)
+
+
 def resume_unfinished() -> None:
     """After a restart, unfinished incidents continue from their last completed step. The step that was running is
     decided again (its TrueForge turn died with the old process); approvals it was waiting for expire."""
     for row in db.q("select id from incidents where status in ('open','mitigated') and stage is distinct from 'done'"):
         for a in approvals.pending(row["id"]):
             approvals.decide(a["id"], "deny", "policy", "restart", "NightShift restarted while waiting; the step will be retried")
+        cancel_sessions(row["id"])
         db.q("update stages set status='interrupted', ended_at=now() where incident_id=%s and status in ('running','waiting_approval')", row["id"])
         threading.Thread(target=Pipeline(row["id"]).run, kwargs={"resume": True}, daemon=True, name=f"pipeline-{row['id']}").start()

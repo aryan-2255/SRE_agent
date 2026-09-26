@@ -23,6 +23,19 @@ function Legend() {
   );
 }
 
+/** Pins whichever agent is working, so its panel follows the incident. */
+function FollowToggle() {
+  const s = useEngine();
+  return (
+    <button onClick={() => engine.setFollow(!s.follow)} aria-pressed={s.follow}
+      className="ml-auto inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-[13px] font-semibold transition-colors duration-150 hairline hover:bg-panel-3"
+      style={{ color: s.follow ? "var(--go-ink)" : "var(--ink-2)", background: s.follow ? "var(--go-soft)" : undefined }}>
+      <span className="size-2 rounded-full" style={{ background: s.follow ? "var(--go)" : "var(--dim)" }} />
+      Follow the live agent
+    </button>
+  );
+}
+
 function HoverCard({ h }: { h: NonNullable<Hover> }) {
   const s = useEngine();
   const stats = useMemo(() => {
@@ -55,7 +68,7 @@ function HoverCard({ h }: { h: NonNullable<Hover> }) {
   const W = 320;
   const left = Math.min(h.x + 18, window.innerWidth - W - 16);
   const top = Math.min(h.y + 18, window.innerHeight - 250);
-  const stateLabel = st ? ({ running: "working", waiting: "needs you", done: "done", failed: "failed", skipped: "skipped" } as const)[st] : h.kind === "agent" ? "idle" : "";
+  const stateLabel = st ? ({ running: "working", waiting: "needs you", done: "done", failed: "failed", skipped: "skipped", interrupted: "cut off" } as const)[st] : h.kind === "agent" ? "idle" : "";
 
   return (
     <motion.div initial={{ opacity: 0, scale: 0.96, y: 4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
@@ -93,7 +106,7 @@ function HoverCard({ h }: { h: NonNullable<Hover> }) {
           {stats.decisions ? <>{stats.decisions} decisions. Latest: {stats.lastDecision}</> : "No decisions yet in this incident."}
         </p>
       )}
-      <p className="m-0 mt-2 text-[11px] text-dim">{h.kind !== "supervisor" ? "Click to pin the conversation and evidence to it." : ""}</p>
+      <p className="m-0 mt-2 text-[11px] text-dim">{h.kind === "system" ? "Click to pin the conversation and evidence to it." : "Click to open everything it did."}</p>
     </motion.div>
   );
 }
@@ -139,6 +152,7 @@ export default function CenterStage() {
       <div className="flex shrink-0 items-center gap-4 px-5 pt-4">
         <h2 className="m-0 shrink-0 whitespace-nowrap text-[15px] font-semibold">Agent network</h2>
         <Legend />
+        <FollowToggle />
       </div>
       <div className="relative min-h-0 flex-1 px-2">
         <NetworkMap onHover={setHover} />

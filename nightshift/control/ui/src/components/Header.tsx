@@ -114,7 +114,11 @@ export default function Header({ onMenu }: { onMenu: () => void }) {
 
       <div className="flex shrink-0 items-center gap-4 min-[1700px]:gap-6">
         <Metric label="Elapsed"><Elapsed /></Metric>
-        <Metric label="Cost"><CountUp value={inr(s.costUsd)} decimals={2} prefix="₹" /></Metric>
+        <Metric label={s.me?.budget_usd ? `Cost of ₹${Math.round(inr(s.me.budget_usd))} budget` : "Cost"}>
+          <span style={{ color: s.me?.budget_usd && s.costUsd > s.me.budget_usd * 0.8 ? "var(--red-ink)" : undefined }}>
+            <CountUp value={inr(s.costUsd)} decimals={2} prefix="₹" />
+          </span>
+        </Metric>
         <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em]" style={{ color: mode.color }}>
           <span className="relative inline-flex size-2">
             {(s.mode === "live" || s.mode === "idle" || s.mode === "replay") && <span className="ns-ping absolute inset-0 rounded-full" style={{ background: mode.color }} />}
@@ -122,6 +126,7 @@ export default function Header({ onMenu }: { onMenu: () => void }) {
           </span>
           {mode.label}
         </div>
+        {s.me?.name && <span className="text-[13px] text-muted max-[1499px]:hidden" title="Approvals are recorded under this name">{s.me.name}</span>}
         <div className="flex items-center gap-2">
           <button onClick={toggle} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
             className="grid size-9 place-items-center rounded-lg text-ink-2 transition-colors duration-150 hairline hover:bg-panel-3 active:scale-[0.97]">

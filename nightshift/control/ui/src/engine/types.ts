@@ -1,5 +1,5 @@
 export type Mode = "idle" | "live" | "replay" | "view";
-export type NodeState = "running" | "waiting" | "done" | "failed" | "skipped";
+export type NodeState = "running" | "waiting" | "done" | "failed" | "skipped" | "interrupted";
 
 export interface NsEvent {
   id?: number;
@@ -47,6 +47,19 @@ export interface ServiceTile {
   over: boolean;
   over_for_s: number;
   fires_after_s: number;
+  state?: "over" | "quiet" | "ok";
+  failed_requests?: number;
+  /** the endpoint that is failing inside an otherwise healthy service */
+  op?: { name: string; error_pct: number; limit_pct: number; failed_requests: number };
+}
+
+export interface Signal {
+  service: string;
+  value: number;
+  above: number;
+  over: boolean;
+  over_for_s: number;
+  explain: string;
 }
 
 export interface Synthetic {
@@ -58,7 +71,10 @@ export interface Synthetic {
 
 export interface WatchData {
   services: Record<string, ServiceTile>;
+  signals?: Record<string, Signal>;
   synthetic: Synthetic | null;
+  /** monitoring itself is down: Prometheus silent or no fresh metrics */
+  blind?: { service: string; reason: string; since?: number } | null;
   ts?: number | null;
 }
 
@@ -88,12 +104,38 @@ export interface NowLine {
   detail?: string;
 }
 
+/** What the person deciding sees next to the change (sent by the server with approval.requested). */
+export interface ApprovalContext {
+  service?: string;
+  severity?: string | null;
+  live?: { error_pct: number; rps?: number; failed_requests?: number; limit_pct?: number; state?: string } | null;
+  diagnosis?: string;
+  plan_option?: { action?: string; risk?: string; reversible?: boolean; blast_radius?: string; evidence?: string; speculative?: boolean };
+  undo?: string;
+}
+
 export interface Pending {
   id: number;
   stage: string;
   tool: string;
   args: any;
+  context?: ApprovalContext;
+  undo?: string;
 }
+
+/** One agent as described by GET /api/agents. */
+export interface TeamMember {
+  name: string;
+  stage: string | null;
+  job: string;
+  model: string;
+  tools: Record<string, string[]>;
+  asks_before: string[];
+  sandbox: boolean;
+  sub_agents: boolean;
+}
+
+export interface Me { name: string | null; mode: "users" | "local"; budget_usd?: number; error?: string }
 
 export interface State {
   mode: Mode;
@@ -118,6 +160,12 @@ export interface State {
   hubThinking: boolean;
   hot: Record<string, number>;
   incidents: Incident[];
+  /** evidence items per agent that no tool output backs up */
+  unverified: Record<string, number>;
+  team: TeamMember[];
+  me: Me | null;
+  /** pin whichever agent is working */
+  follow: boolean;
 }
 
 export type Fx =

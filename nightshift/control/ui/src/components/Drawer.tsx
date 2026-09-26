@@ -6,7 +6,7 @@ import { useEngine } from "../engine/useEngine";
 import { Pill } from "./Header";
 import { ease } from "../lib/format";
 
-type View = "incidents" | "connections" | "system";
+type View = "incidents" | "team" | "connections" | "system";
 const TONE: Record<string, string> = { open: "red", mitigated: "go", resolved: "go", escalated: "red", false_alarm: "muted" };
 
 function Incidents({ close }: { close: () => void }) {
@@ -37,6 +37,28 @@ function Incidents({ close }: { close: () => void }) {
             </button>
           </div>
         </motion.li>
+      ))}
+    </ul>
+  );
+}
+
+function Team() {
+  const s = useEngine();
+  if (!s.team.length) return <p className="text-[14px] text-muted">Loading the team…</p>;
+  return (
+    <ul className="m-0 list-none space-y-2 p-0">
+      {s.team.map((t) => (
+        <li key={t.name} className="rounded-2xl bg-panel-2 p-4 hairline">
+          <div className="flex items-center gap-3">
+            <span className="text-[15px] font-semibold">{t.stage ? (t.stage === "supervisor" ? "Supervisor" : t.stage) : t.name}</span>
+            <span className="font-mono text-[12px] text-muted">{t.name}</span>
+            <span className="ml-auto text-[12.5px] text-muted">{t.model} model{t.sandbox ? " · runs code in a sandbox" : ""}</span>
+          </div>
+          <p className="m-0 mt-1.5 text-[13.5px] text-ink-2">{t.job}</p>
+          <p className="m-0 mt-1.5 text-[12.5px]" style={{ color: t.asks_before.length ? "var(--amber-ink)" : "var(--muted)" }}>
+            {t.asks_before.length ? `Asks you before: ${t.asks_before.join(", ")}` : "Read-only: never changes anything"}
+          </p>
+        </li>
       ))}
     </ul>
   );
@@ -91,7 +113,7 @@ export default function Drawer({ open, onClose }: { open: boolean; onClose: () =
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, [onClose]);
-  const tabs: [View, string][] = [["incidents", "Incidents"], ["connections", "Connections"], ["system", "System file"]];
+  const tabs: [View, string][] = [["incidents", "Incidents"], ["team", "The team"], ["connections", "Connections"], ["system", "System file"]];
   return (
     <AnimatePresence>
       {open && (
@@ -117,6 +139,7 @@ export default function Drawer({ open, onClose }: { open: boolean; onClose: () =
               <AnimatePresence mode="wait">
                 <motion.div key={view} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.2, ease }}>
                   {view === "incidents" && <Incidents close={onClose} />}
+                  {view === "team" && <Team />}
                   {view === "connections" && <Connections />}
                   {view === "system" && <SystemFile />}
                 </motion.div>

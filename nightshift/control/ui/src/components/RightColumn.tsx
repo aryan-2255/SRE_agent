@@ -19,14 +19,20 @@ export function Approval() {
   const a = s.pending[0];
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<null | "approve" | "deny">(null);
+  const [error, setError] = useState<string | null>(null);
   const live = s.mode === "live";
   const args = a && a.args && typeof a.args === "object" ? Object.entries(a.args) : [];
+  const ctx = a?.context || {};
+  const liveNow = ctx.live;
+  const over = liveNow ? liveNow.error_pct > (liveNow.limit_pct ?? 5) : false;
+  const opt = ctx.plan_option;
 
   async function decide(d: "approve" | "deny") {
     if (!a) return;
     setBusy(d);
-    try { await engine.decide(a.id, d, d === "deny" ? reason || "Denied from the dashboard" : ""); }
-    finally { setBusy(null); setReason(""); }
+    setError(null);
+    try { setError(await engine.decide(a.id, d, d === "deny" ? reason || "Denied from the dashboard" : "")); }
+    finally { setBusy(null); if (d === "approve") setReason(""); }
   }
 
   return (
@@ -59,8 +65,29 @@ export function Approval() {
               ))}
             </dl>
           )}
+          <dl className="m-0 mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13.5px] leading-[1.45]">
+            <dt className="text-muted">Right now</dt>
+            <dd className="m-0 text-ink-2">
+              {liveNow ? <>
+                <span className="font-semibold" style={{ color: over ? "var(--red-ink)" : "var(--go-ink)" }}>{liveNow.error_pct}% errors</span>
+                {" "}on {ctx.service}{liveNow.failed_requests != null && <>, {liveNow.failed_requests} failed requests in 2 min</>} (limit {liveNow.limit_pct ?? 5}%)
+              </> : <span className="text-muted">No live numbers for {ctx.service || "this service"}</span>}
+            </dd>
+            {ctx.diagnosis && <><dt className="text-muted">Why</dt><dd className="m-0 text-ink-2">{ctx.diagnosis}</dd></>}
+            {opt && <>
+              <dt className="text-muted">Planner says</dt>
+              <dd className="m-0 text-ink-2">
+                Risk {opt.risk || "?"}, {opt.reversible ? "reversible" : "not reversible"}{opt.blast_radius ? <>; affects {opt.blast_radius}</> : null}.
+                {opt.speculative
+                  ? <span className="ml-1 inline-flex items-center rounded-md px-1.5 py-0.5 text-[12px] font-semibold" style={{ background: "var(--amber-soft)", color: "var(--amber-ink)" }}>Guess, no evidence</span>
+                  : opt.evidence ? <span className="block text-muted">Evidence: {opt.evidence}</span> : null}
+              </dd>
+            </>}
+            <dt className="text-muted">To undo</dt>
+            <dd className="m-0 text-ink-2">{ctx.undo || a.undo || UNDO[a.tool] || "Check the arguments before approving."}</dd>
+          </dl>
           <p className="m-0 mt-3 text-[13px] text-muted">
-            {UNDO[a.tool] || "Check the arguments before approving."}
+            {s.me?.name && <>Your decision is recorded as <span className="font-semibold text-ink-2">{s.me.name}</span>.</>}
             {s.inc?.jira_url && <> Or reply <code className="text-ink-2">/approve</code> on <a href={s.inc.jira_url} target="_blank" rel="noopener">{s.inc.jira_key}</a>.</>}
           </p>
           <div className="mt-4 flex gap-2">
@@ -77,6 +104,7 @@ export function Approval() {
           <input value={reason} onChange={(e) => setReason(e.target.value)} disabled={!live}
             placeholder={live ? "Reason, sent with a denial" : "Replay: decisions are read-only"}
             className="mt-2 h-10 w-full rounded-xl bg-panel px-3.5 text-[13.5px] text-ink outline-none transition-shadow duration-150 hairline placeholder:text-dim focus:shadow-[inset_0_0_0_1.5px_var(--amber)] disabled:opacity-70" />
+          {error && <p className="m-0 mt-2 text-[13px] font-medium" style={{ color: "var(--red-ink)" }}>{error}</p>}
           {!live && <p className="m-0 mt-2 text-[12px] text-dim">Showing {describeArgs(a.args) || a.tool} as it was requested.</p>}
         </motion.section>
       )}

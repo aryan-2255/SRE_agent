@@ -132,3 +132,55 @@ def test_supervisor_asks_about_unverified_evidence_only_once(monkeypatch):
     assert p.needs_judgement({"validation": "", "docs": ""}, {"action": "run", "stage": "validation"})
     p.history.append({"step": 2, "action": "ask", "stage": "diagnosis", "done": True})
     assert p.needs_judgement({"validation": "", "docs": ""}, {"action": "run", "stage": "validation"}) is None
+
+
+def test_no_sandbox_validation_without_a_suspect_change(monkeypatch):
+    p = pipeline({"triage": {}, "diagnosis": {"confidence": 0.9}}, ["triage", "diagnosis"], category="unknown", monkeypatch=monkeypatch)
+    assert "validation" not in p.allowed_moves() and "plan" in p.allowed_moves()
+    p.out["diagnosis"]["suspect_commit"] = "2bf06ff0"
+    assert "validation" in p.allowed_moves() and "plan" not in p.allowed_moves()
+
+
+def test_unrunnable_language_can_still_be_planned(monkeypatch):
+    out = {"triage": {}, "diagnosis": {"suspect_files": ["src/ad/AdService.java"]}, "validation": {"reproduced": False, "runnable": False}}
+    p = pipeline(out, ["triage", "diagnosis", "validation"], category="code", monkeypatch=monkeypatch)
+    assert "plan" in p.allowed_moves() and "fix" not in p.allowed_moves()
+
+
+def test_code_path_runs_in_order_without_the_supervisor(monkeypatch):
+    base = {**CODE_OK, "verify": {"recovered": True}}
+    steps = ["triage", "diagnosis", "validation", "plan", "mitigation", "verify"]
+    p = pipeline(base, steps, monkeypatch=monkeypatch)
+    assert p.default_next(p.allowed_moves())["stage"] == "fix"
+    p = pipeline({**base, "fix": {}}, steps + ["fix"], monkeypatch=monkeypatch)
+    assert p.default_next(p.allowed_moves())["stage"] == "test"
+    p = pipeline({**base, "fix": {}, "test": {"passed": False}}, steps + ["fix", "test"], monkeypatch=monkeypatch)
+    assert p.default_next(p.allowed_moves())["stage"] == "fix"
+    p = pipeline({**base, "fix": {}, "test": {"passed": True}}, steps + ["fix", "test"], monkeypatch=monkeypatch)
+    assert p.default_next(p.allowed_moves())["stage"] == "pr"
+    p = pipeline({**base, "fix": {}, "test": {"passed": True}, "pr": {"pr_url": "u"}}, steps + ["fix", "test", "pr"], monkeypatch=monkeypatch)
+    assert p.default_next(p.allowed_moves())["stage"] == "review"
+    p = pipeline({**base, "fix": {}, "test": {"passed": True}, "pr": {"pr_url": "u"}, "review": {"verdict": "approve"}},
+                 steps + ["fix", "test", "pr", "review"], monkeypatch=monkeypatch)
+    assert p.default_next(p.allowed_moves())["stage"] == "cicd"
+
+
+def test_the_server_decides_who_approves(monkeypatch):
+    from starlette.requests import Request
+    from fastapi import HTTPException
+    from control import app, settings
+
+    def req(host, token=""):
+        headers = [(b"authorization", f"Bearer {token}".encode())] if token else []
+        return Request({"type": "http", "client": (host, 1), "headers": headers})
+
+    monkeypatch.setattr(settings, "DASHBOARD_USERS", {})
+    assert app.who(req("127.0.0.1")) == "local operator"
+    with pytest.raises(HTTPException):
+        app.who(req("192.168.1.20"))
+    monkeypatch.setattr(settings, "DASHBOARD_USERS", {"s3cret": "aryan"})
+    assert app.who(req("192.168.1.20", "s3cret")) == "aryan"
+    with pytest.raises(HTTPException):
+        app.who(req("127.0.0.1"))            # with users configured, even this machine must sign in
+    with pytest.raises(HTTPException):
+        app.who(req("127.0.0.1", "guess"))

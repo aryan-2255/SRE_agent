@@ -110,7 +110,7 @@ class DockerComposeRuntime:
 
     # ---------- change ----------
     def deploy(self, service: str, path: str, commit: str = "origin/main") -> dict:
-        if self.git("status", "--porcelain", "--untracked-files=no", "--", "."):
+        if self.git("status", "--porcelain", "--untracked-files=no", "--", ".", ":!src/flagd/demo.flagd.json"):
             raise ComposeError("The shop folder has uncommitted changes. Commit or stash them before deploying.")
         self._ensure_baseline(service)
         self.git("fetch", "--quiet", "origin")
@@ -181,7 +181,7 @@ class DockerComposeRuntime:
         tag = f"nightshift/{service}:{commit}"
         if not _run(["docker", "images", "-q", tag]):
             # Build the merged commit's image without touching the running service.
-            if self.git("status", "--porcelain", "--untracked-files=no", "--", "."):
+            if self.git("status", "--porcelain", "--untracked-files=no", "--", ".", ":!src/flagd/demo.flagd.json"):
                 raise ComposeError("The shop folder has uncommitted changes. Commit or stash them before deploying.")
             self._ensure_baseline(service)
             self.git("fetch", "--quiet", "origin")

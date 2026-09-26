@@ -11,7 +11,7 @@ export type Hover = { id: string; kind: "agent" | "system" | "supervisor"; x: nu
 
 const SVGNS = "http://www.w3.org/2000/svg";
 const SYS_ICON: Record<SystemKey, typeof Eye> = { watcher: Eye, shop: Storefront, human: Signature, github: GithubLogo, sandbox: Cube, harness: TreeStructure };
-const GLYPH: Record<NodeState, string> = { running: "working", waiting: "needs you", done: "done", failed: "failed", skipped: "skipped" };
+const GLYPH: Record<NodeState, string> = { running: "working", waiting: "needs you", done: "done", failed: "failed", skipped: "skipped", interrupted: "cut off" };
 
 function edge(from: { x: number; y: number }, to: { x: number; y: number }, r: number) {
   const dx = to.x - from.x, dy = to.y - from.y, d = Math.hypot(dx, dy) || 1;
@@ -22,7 +22,7 @@ function curve(a: { x: number; y: number }, b: { x: number; y: number }, bend = 
   return { d: `M${a.x},${a.y} Q${mx - (b.y - a.y) * bend},${my + (b.x - a.x) * bend} ${b.x},${b.y}`, q: { x: mx - (b.y - a.y) * bend, y: my + (b.x - a.x) * bend } };
 }
 const stateColor = (s?: NodeState) =>
-  s === "running" ? "var(--go)" : s === "waiting" ? "var(--amber)" : s === "done" ? "var(--go)" : s === "failed" ? "var(--red)" : "var(--line-2)";
+  s === "running" ? "var(--go)" : s === "waiting" ? "var(--amber)" : s === "done" ? "var(--go)" : s === "failed" || s === "interrupted" ? "var(--red)" : "var(--line-2)";
 
 export default function NetworkMap({ onHover }: { onHover?: (h: Hover) => void }) {
   const s = useEngine();
@@ -44,7 +44,8 @@ export default function NetworkMap({ onHover }: { onHover?: (h: Hover) => void }
     onMouseEnter: (e: React.MouseEvent) => { setFocus(id === "supervisor" ? null : id, false); onHover?.({ id, kind, x: e.clientX, y: e.clientY }); },
     onMouseMove: (e: React.MouseEvent) => onHover?.({ id, kind, x: e.clientX, y: e.clientY }),
     onMouseLeave: () => { setFocus(null, false); onHover?.(null); },
-    onClick: () => id !== "supervisor" && setFocus(focus === id ? null : id, true),
+    // a click pins the agent (or the supervisor) and opens its panel; following the live agent stops
+    onClick: () => { if (kind !== "system") engine.setFollow(false); setFocus(focus === id ? null : id, true); },
     style: { cursor: "pointer" } as React.CSSProperties,
   });
   const fxRef = useRef<SVGGElement>(null);

@@ -4,11 +4,12 @@ import { WarningOctagon, Signature, CheckCircle, XCircle } from "@phosphor-icons
 import { engine } from "./engine/engine";
 import Header from "./components/Header";
 import StageRail from "./components/StageRail";
-import { Watcher, SyntheticCustomer, ToolTraffic } from "./components/LeftColumn";
+import { Watcher, SyntheticCustomer, ToolTraffic, BlindBanner } from "./components/LeftColumn";
 import CenterStage from "./components/CenterStage";
 import { Approval, Conversation, Evidence } from "./components/RightColumn";
 import Timeline from "./components/Timeline";
 import Drawer from "./components/Drawer";
+import AgentPanel from "./components/AgentPanel";
 
 const TOAST_ICON = {
   alert: <WarningOctagon size={18} weight="fill" style={{ color: "var(--red)" }} />,
@@ -32,8 +33,9 @@ export default function App() {
   }, []);
 
   return (
-    <div className="grid h-full grid-rows-[64px_46px_minmax(0,1fr)_auto] overflow-hidden">
+    <div className="grid h-full grid-rows-[64px_auto_46px_minmax(0,1fr)_auto] overflow-hidden">
       <Header onMenu={() => setDrawer(true)} />
+      <BlindBanner />
       <StageRail />
       <main className="grid min-h-0 grid-cols-[clamp(250px,17.5vw,340px)_minmax(0,1fr)_clamp(300px,22vw,430px)] gap-3 p-3 min-[1700px]:gap-4 min-[1700px]:p-4">
         <aside className="flex min-h-0 flex-col gap-3 min-[1700px]:gap-4">
@@ -49,6 +51,7 @@ export default function App() {
         </aside>
       </main>
       <Timeline />
+      <AgentPanel />
       <Drawer open={drawer} onClose={closeDrawer} />
       <Toaster position="top-center" offset={76} gap={8}
         toastOptions={{

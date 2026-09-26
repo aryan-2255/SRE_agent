@@ -18,10 +18,28 @@ class FlagdFlags:
         self.file = file
         self.backup_dir = backup_dir
 
+    @staticmethod
+    def _branches(targeting) -> list[int] | None:
+        """Positions of the result branches of a simple flagd 'if' rule: [cond, value, (cond, value)..., else]."""
+        rule = (targeting or {}).get("if")
+        if not isinstance(rule, list) or len(rule) < 2:
+            return None
+        return [i for i in range(1, len(rule), 2) if i < len(rule) - (len(rule) % 2 == 0) or len(rule) == 2]
+
     def all(self) -> dict:
         flags = json.loads(self.file.read_text())["flags"]
-        return {name: {"value": f["defaultVariant"], "options": list(f["variants"]), "description": f.get("description", "")}
-                for name, f in flags.items()}
+        out = {}
+        for name, f in flags.items():
+            row = {"value": f["defaultVariant"], "options": list(f["variants"]), "description": f.get("description", "")}
+            idx = self._branches(f.get("targeting"))
+            if idx:
+                rule = f["targeting"]["if"]
+                row["targeted_value"] = rule[idx[0]]
+                row["targeting"] = json.dumps(rule[0])
+                if rule[idx[0]] != f["defaultVariant"]:
+                    row["value"] = f"{f['defaultVariant']} (but {rule[idx[0]]} where {json.dumps(rule[0])})"
+            out[name] = row
+        return out
 
     def set(self, flag: str, variant: str) -> dict:
         data = json.loads(self.file.read_text())
@@ -35,8 +53,18 @@ class FlagdFlags:
         backup = self.backup_dir / f"flagd-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}.json"
         shutil.copy(self.file, backup)
         f["defaultVariant"] = variant
+        out = {"flag": flag, "old": old, "new": variant, "undo": f"set_flag('{flag}', '{old}')"}
+        # A targeting rule overrides the default for the requests it matches (e.g. one product id), so a flag
+        # with targeting is switched there too; otherwise "on" or "off" would silently not apply to them.
+        idx = self._branches(f.get("targeting"))
+        if idx:
+            rule = f["targeting"]["if"]
+            out["old"] = rule[idx[0]] if rule[idx[0]] != old else old
+            for i in idx:
+                rule[i] = variant
+            out["applies_to"] = json.dumps(rule[0])
         self.file.write_text(json.dumps(data, indent=2) + "\n")
-        return {"flag": flag, "old": old, "new": variant, "undo": f"set_flag('{flag}', '{old}')"}
+        return out
 
 
 class ReadOnlySQL:

@@ -67,8 +67,10 @@ def run(sc: dict) -> dict:
     try:
         while time.time() - t0 < timeout:
             new = [i for i in incidents() if i["id"] not in before]
-            if new and not inc:
-                inc = new[-1]
+            # other problems can open incidents at the same time: score the one on the expected service
+            wanted = [i for i in new if i["service"] in exp.get("service", [])] or ([] if exp.get("service") else new)
+            if wanted and not inc:
+                inc = wanted[-1]
                 r.update(detected=True, incident=inc["id"], detect_s=round(time.time() - t0), service=inc["service"])
                 if exp.get("incident") is False:
                     break

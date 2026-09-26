@@ -1,0 +1,95 @@
+[
+ {
+  "id": "cart-failure",
+  "detected": true,
+  "incident": "INC-010",
+  "detect_s": 113,
+  "service": "cart",
+  "first_change": {
+   "tool": "set_flag",
+   "args": {
+    "flag": "cartFailure",
+    "variant": "off"
+   }
+  },
+  "fix_ok": true,
+  "mitigate_s": 304,
+  "status": "resolved",
+  "cost_usd": 0.28,
+  "total_s": 332,
+  "cause_ok": true,
+  "service_ok": true,
+  "unverified_evidence": 0,
+  "ok": true
+ },
+ {
+  "id": "product-catalog-failure",
+  "detected": false,
+  "ok": false
+ },
+ {
+  "id": "ad-failure",
+  "detected": true,
+  "incident": "INC-011",
+  "detect_s": 67,
+  "service": "ad",
+  "first_change": {
+   "tool": "set_flag",
+   "args": {
+    "flag": "adFailure",
+    "variant": "off"
+   }
+  },
+  "fix_ok": true,
+  "mitigate_s": 287,
+  "status": "resolved",
+  "cost_usd": 0.223,
+  "total_s": 309,
+  "cause_ok": true,
+  "service_ok": true,
+  "unverified_evidence": 0,
+  "ok": true
+ },
+ {
+  "id": "kafka-queue-problems",
+  "detected": true,
+  "incident": "INC-012",
+  "detect_s": 37,
+  "service": "ad",
+  "status": "open",
+  "cost_usd": 2.855,
+  "total_s": 483,
+  "cause_ok": true,
+  "service_ok": false,
+  "unverified_evidence": 0,
+  "ok": false
+ },
+ {
+  "id": "payment-bad-deploy",
+  "detected": true,
+  "incident": "INC-015",
+  "detect_s": 81,
+  "service": "payment",
+  "first_change": {
+   "tool": "rollback",
+   "args": {
+    "service": "payment",
+    "to_commit": "285e4334"
+   }
+  },
+  "fix_ok": true,
+  "mitigate_s": 510,
+  "status": "resolved",
+  "cost_usd": 2.653,
+  "total_s": 902,
+  "cause_ok": true,
+  "service_ok": true,
+  "unverified_evidence": 0,
+  "ok": true
+ },
+ {
+  "id": "one-bad-request",
+  "detected": false,
+  "ok": true
+ }
+]
