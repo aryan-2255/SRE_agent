@@ -30,7 +30,7 @@ PROMETHEUS_URL = env("PROMETHEUS_URL", "http://localhost:9090")
 OPS_MCP_URL = env("OPS_MCP_URL", "http://localhost:8000/mcp")
 OPS_MCP_TOKEN = env("OPS_MCP_TOKEN")
 DEMO_MODE = env("DEMO_MODE", "true").lower() == "true"
-INCIDENT_BUDGET_USD = float(env("INCIDENT_BUDGET_USD", "2.0"))
+INCIDENT_BUDGET_USD = float(env("INCIDENT_BUDGET_USD", "5.0"))
 STAGE_RUNNER = env("STAGE_RUNNER", "trueforge")  # or "fake"
 SUPERVISOR = env("SUPERVISOR", "on").lower() != "off"  # AI chooses the next step within guardrails
 USD_TO_INR = float(env("USD_TO_INR", "88"))

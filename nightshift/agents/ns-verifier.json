@@ -3,7 +3,7 @@
   "description": "Checks the live system recovered after a change.",
   "manifest": {
     "model": {
-      "name": "$SMALL",
+      "name": "$STRONG",
       "params": {
         "reasoning_effort": "low"
       }

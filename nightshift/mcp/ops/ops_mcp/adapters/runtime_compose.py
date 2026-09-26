@@ -81,7 +81,7 @@ class DockerComposeRuntime:
 
     def running_commit(self, service: str) -> str:
         for entry in reversed(self.history()):
-            if entry["service"] == service and entry["action"] in ("deploy", "rollback", "promote_canary", "demo"):
+            if entry["service"] == service and entry["action"] in ("deploy", "rollback", "promote_canary", "demo", "reset"):
                 return entry["commit"]
         return "baseline"
 

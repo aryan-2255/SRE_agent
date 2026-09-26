@@ -47,7 +47,9 @@ Working and tested against the live shop: watcher, ops server (all tools), rollb
 
 Supervisor agent working live: on a flag incident it chose each step with a reason, skipped the sandbox and code path because the cause was a flag, and resolved it for about $0.23.
 
-Not yet run end to end: the code-fix path (validator → coder → tester → PR → reviewer → canary). Planned: a toolsmith agent that writes missing read-only tools.
+Code-fix path run end to end on 26 Sep (INC-004): a bad commit pushed to the fork was detected, reproduced in a Daytona sandbox, rolled back, fixed by the coder, tested, opened as a PR, reviewed, merged and shipped through a 10% canary. When the PR agent reported a PR it had not created, the reviewer caught it and the supervisor sent the work back. Try it yourself: [docs/MANUAL-TEST.md](docs/MANUAL-TEST.md).
+
+Planned: a toolsmith agent that writes missing read-only tools.
 
 ## AI tools used to build this
 

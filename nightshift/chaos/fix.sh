@@ -17,6 +17,13 @@ if [ -n "$BASE" ] && ! git diff --quiet "$BASE" HEAD -- src/payment; then
   echo "Reset src/payment to its pre-demo code on main (push it with: git push origin main)"
 fi
 docker tag nightshift/payment:baseline ghcr.io/open-telemetry/demo:latest-payment
+python3 - "$SHOP/.nightshift/deploys.json" <<'PY'
+import json, sys, datetime, pathlib
+p = pathlib.Path(sys.argv[1]); h = json.loads(p.read_text()) if p.exists() else []
+h.append({"time": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "action": "reset",
+          "service": "payment", "commit": "baseline", "image": "nightshift/payment:baseline", "by": "chaos/fix.sh"})
+p.write_text(json.dumps(h, indent=1))
+PY
 docker compose -p astronomy-shop --env-file .env --env-file .env.override -f compose.yaml -f compose.full.yaml \
   -f compose.observability.yaml -f compose.extras.yaml -f compose.agent.yaml up -d --no-deps --force-recreate payment >/dev/null
 echo "Shop restored: flags off, payment on its baseline image."
